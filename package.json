@@ -1,0 +1,55 @@
+{
+  "name": "wavesentry",
+  "version": "1.0.0",
+  "description": "WaveSentry - Audio Output Monitor & Recorder",
+  "author": {
+    "name": "Paul",
+    "email": "paul@example.com"
+  },
+  "homepage": "https://github.com/paul/wavesentry",
+  "main": "src/main-electron.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "electron": "electron .",
+    "build": "electron-builder build --win --linux"
+  },
+  "dependencies": {
+    "24": "^0.0.0",
+    "express": "^5.2.1",
+    "node.js": "^0.0.1-security",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.wavesentry.app",
+    "productName": "WaveSentry",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "maintainer": "Paul <paul@example.com>",
+      "category": "Audio"
+    }
+  }
+}

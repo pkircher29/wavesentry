@@ -1,0 +1,8 @@
+node_modules/
+dist/
+recordings/
+.gemini/
+.antigravity/
+.DS_Store
+*.log
+*.wav

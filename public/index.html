@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A professional, web-based tool to monitor and record the system audio output channels of your laptop using PipeWire.">
+  <title>WaveSentry - Audio Output Monitor & Recorder</title>
+  <!-- Google Fonts for professional high-end audio device look -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <div class="logo-icon"></div>
+        <h1 class="app-title">WaveSentry</h1>
+        <span class="app-subtitle">Audio Capture Hub</span>
+      </div>
+      <div class="status-badge-container">
+        <div id="status-dot" class="status-dot idle"></div>
+        <span id="status-text" class="status-text">DISCONNECTED</span>
+      </div>
+    </header>
+
+    <!-- Main Dashboard Grid -->
+    <main class="dashboard-grid">
+      <!-- Left Column: Controls & Real-Time Monitoring -->
+      <section class="dashboard-panel control-section">
+        <div class="panel-header">
+          <h2 class="panel-title">Capture & Live Feed</h2>
+          <span class="panel-indicator">SYSTEM MONITOR</span>
+        </div>
+
+        <div class="panel-content">
+          <!-- Device Selector -->
+          <div class="control-group">
+            <label for="device-select" class="control-label">Select Audio Source</label>
+            <div class="select-wrapper">
+              <select id="device-select" class="custom-select">
+                <option value="" disabled selected>Loading available devices...</option>
+              </select>
+              <div class="select-arrow"></div>
+            </div>
+            <p class="control-tip">Select any output sink (monitor) or input device from PipeWire.</p>
+          </div>
+
+          <!-- Monitoring & Level Meters -->
+          <div class="monitoring-container">
+            <div class="monitor-controls">
+              <span class="section-sublabel">Live VU Levels</span>
+              <button id="monitor-toggle-btn" class="btn btn-secondary" disabled>
+                <span class="btn-icon monitor-icon"></span>
+                <span id="monitor-btn-text">Enable Monitor</span>
+              </button>
+            </div>
+
+            <!-- LED VU Meters -->
+            <div class="vu-meters">
+              <!-- Left Channel -->
+              <div class="vu-meter-row">
+                <span class="vu-label">L</span>
+                <div class="vu-bar-container">
+                  <div id="vu-bar-L" class="vu-bar-fill"></div>
+                  <div id="vu-peak-L" class="vu-peak-tick"></div>
+                  <!-- Scale marks -->
+                  <div class="vu-scale">
+                    <span style="left: 0%">-60</span>
+                    <span style="left: 50%">-18</span>
+                    <span style="left: 80%">-6</span>
+                    <span style="left: 100%">0dB</span>
+                  </div>
+                </div>
+                <span id="vu-db-L" class="vu-db-display">-∞ dB</span>
+              </div>
+
+              <!-- Right Channel -->
+              <div class="vu-meter-row">
+                <span class="vu-label">R</span>
+                <div class="vu-bar-container">
+                  <div id="vu-bar-R" class="vu-bar-fill"></div>
+                  <div id="vu-peak-R" class="vu-peak-tick"></div>
+                  <!-- Scale marks -->
+                  <div class="vu-scale">
+                    <span style="left: 0%">-60</span>
+                    <span style="left: 50%">-18</span>
+                    <span style="left: 80%">-6</span>
+                    <span style="left: 100%">0dB</span>
+                  </div>
+                </div>
+                <span id="vu-db-R" class="vu-db-display">-∞ dB</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Real-Time Waveform Graph -->
+          <div class="waveform-container">
+            <span class="section-sublabel">Amplitude History</span>
+            <canvas id="waveform-canvas" class="waveform-canvas"></canvas>
+          </div>
+
+          <!-- Recording Controls Card -->
+          <div class="recording-card">
+            <div class="recording-card-header">
+              <span class="section-sublabel">Recorder Engine</span>
+              <div id="recording-indicator" class="recording-indicator-pulse"></div>
+            </div>
+            
+            <div class="filename-input-group">
+              <label for="filename-prefix" class="control-label small">File Prefix</label>
+              <input type="text" id="filename-prefix" class="custom-input" value="sys_output" placeholder="e.g., zoom_call, music">
+            </div>
+
+            <!-- Auto Split Settings -->
+            <div class="auto-split-group">
+              <div class="checkbox-wrapper">
+                <input type="checkbox" id="auto-split-toggle" class="custom-checkbox">
+                <label for="auto-split-toggle" class="control-label small cursor-pointer">Auto-Split on Silence</label>
+              </div>
+              <div id="auto-split-sliders" class="sliders-panel collapsed">
+                <div class="slider-group">
+                  <div class="slider-header">
+                    <span class="control-label small">Silence Threshold</span>
+                    <span id="threshold-val" class="slider-val">-45 dB</span>
+                  </div>
+                  <input type="range" id="silence-threshold" min="-60" max="-25" value="-45" class="custom-slider">
+                </div>
+                <div class="slider-group">
+                  <div class="slider-header">
+                    <span class="control-label small">Silence Duration</span>
+                    <span id="duration-val" class="slider-val">1.0 s</span>
+                  </div>
+                  <input type="range" id="silence-duration" min="0.5" max="5.0" step="0.5" value="1.0" class="custom-slider">
+                </div>
+              </div>
+            </div>
+
+            <!-- Monospaced Segment Display -->
+            <div class="timer-display-container">
+              <div class="display-label">ELAPSED TIME</div>
+              <div id="timer-display" class="timer-display">00:00:00</div>
+              <div class="display-details">
+                <span id="record-size" class="display-detail-item">0.00 MB</span>
+                <span class="display-detail-divider">|</span>
+                <span class="display-detail-item">44.1 kHz / 16-bit / Stereo</span>
+              </div>
+            </div>
+
+            <div class="recording-actions">
+              <button id="record-btn" class="btn btn-record" disabled>
+                <span class="record-btn-dot"></span>
+                <span id="record-btn-text">Start Recording</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Recording Library -->
+      <section class="dashboard-panel library-section">
+        <div class="panel-header">
+          <h2 class="panel-title">Saved Recordings</h2>
+          <button id="refresh-library-btn" class="btn-icon-only refresh-btn" title="Refresh library">
+            <svg class="icon" viewBox="0 0 24 24">
+              <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="panel-content library-wrapper">
+          <!-- Custom Audio Player Panel -->
+          <div id="custom-player" class="custom-player hidden">
+            <div class="player-header">
+              <span class="player-title-label">Now Playing</span>
+              <span id="player-filename" class="player-filename">recording_12345.wav</span>
+            </div>
+            
+            <div class="player-progress-bar-container">
+              <input type="range" id="player-progress" class="player-progress" min="0" max="100" value="0">
+              <div class="player-time-row">
+                <span id="player-time-current">00:00</span>
+                <span id="player-time-duration">00:00</span>
+              </div>
+            </div>
+
+            <div class="player-controls-row">
+              <button id="player-play-btn" class="btn-player-play" title="Play/Pause">
+                <!-- Play Icon -->
+                <svg id="play-icon" class="player-svg-icon" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+                <!-- Pause Icon -->
+                <svg id="pause-icon" class="player-svg-icon hidden" viewBox="0 0 24 24">
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                </svg>
+              </button>
+
+              <div class="player-volume-group">
+                <svg class="volume-icon" viewBox="0 0 24 24">
+                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                </svg>
+                <input type="range" id="player-volume" class="player-volume-slider" min="0" max="100" value="80">
+              </div>
+
+              <div class="player-actions">
+                <a id="player-download-btn" class="btn-player-action" href="#" download title="Download file">
+                  <svg class="player-svg-icon" viewBox="0 0 24 24">
+                    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recordings List -->
+          <div id="recordings-list" class="recordings-list">
+            <div class="empty-state">
+              <div class="empty-icon">📁</div>
+              <p>No recordings found.</p>
+              <p class="empty-subtext">Recordings you capture will show up here.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div class="footer-info">
+        <span>Backend Server: <strong id="server-url">ws://localhost:3000</strong></span>
+        <span class="footer-divider">|</span>
+        <span>Engine: <strong>PipeWire (Linux)</strong></span>
+      </div>
+      <div class="footer-version">v1.0.0</div>
+    </footer>
+  </div>
+
+  <!-- Audio Element for Library Player -->
+  <audio id="library-audio" preload="auto"></audio>
+  
+  <script src="app.js"></script>
+</body>
+</html>
