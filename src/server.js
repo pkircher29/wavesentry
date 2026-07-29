@@ -10,9 +10,21 @@ const isWindows = os.platform() === 'win32';
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
-
 const PORT = process.env.PORT || 3000;
-const RECORDINGS_DIR = path.join(__dirname, '..', 'recordings');
+
+let RECORDINGS_DIR;
+try {
+  const { app: electronApp } = require('electron');
+  if (electronApp && typeof electronApp.getPath === 'function') {
+    RECORDINGS_DIR = path.join(electronApp.getPath('userData'), 'recordings');
+  }
+} catch (e) {
+  // Not in Electron process
+}
+
+if (!RECORDINGS_DIR) {
+  RECORDINGS_DIR = process.env.RECORDINGS_DIR || path.join(process.cwd(), 'recordings');
+}
 
 // Ensure recordings directory exists
 if (!fs.existsSync(RECORDINGS_DIR)) {
