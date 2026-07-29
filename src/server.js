@@ -152,60 +152,62 @@ function listDevicesWindows() {
   try {
     let output = '';
     try {
-      execSync('ffmpeg -f wasapi -list_devices true -i dummy', { stdio: 'pipe' });
+      execSync('ffmpeg -f dshow -list_devices true -i dummy', { stdio: 'pipe' });
     } catch (err) {
       output = err.stderr ? err.stderr.toString() : (err.message || '');
     }
     
     const devices = [];
-    devices.push({
-      id: 'Default Render Device',
-      name: 'Default Render Device',
-      description: 'Default System Output',
-      nick: 'Default',
-      type: 'output',
-      isDefault: true
-    });
-    
     const lines = output.split('\n');
-    let inOutputs = false;
+    let inAudio = false;
     
     for (const line of lines) {
-      if (line.includes('Output devices:')) {
-        inOutputs = true;
+      if (line.includes('DirectShow audio devices')) {
+        inAudio = true;
         continue;
       }
-      if (line.includes('Input devices:')) {
-        inOutputs = false;
+      if (line.includes('DirectShow video devices')) {
+        inAudio = false;
         continue;
       }
       
-      if (inOutputs) {
-        const match = line.match(/\]\s+"([^"]+)"/);
-        if (match) {
-          const name = match[1];
-          if (name !== 'Default Render Device' && !devices.some(d => d.name === name)) {
-            devices.push({
-              id: name,
-              name: name,
-              description: name,
-              nick: name,
-              type: 'output',
-              isDefault: false
-            });
-          }
+      const match = line.match(/\]\s+"([^"]+)"/);
+      if (match) {
+        const name = match[1];
+        const isAudioLine = line.includes('(audio)') || inAudio;
+        if (isAudioLine && !devices.some(d => d.name === name)) {
+          devices.push({
+            id: name,
+            name: name,
+            description: name,
+            nick: name,
+            type: 'audio',
+            isDefault: devices.length === 0
+          });
         }
       }
     }
+    
+    if (devices.length === 0) {
+      devices.push({
+        id: 'Microphone (Realtek(R) Audio)',
+        name: 'Microphone (Realtek(R) Audio)',
+        description: 'Default System Audio',
+        nick: 'Default',
+        type: 'audio',
+        isDefault: true
+      });
+    }
+    
     return devices;
   } catch (err) {
     console.error('Error listing Windows devices:', err);
     return [{
-      id: 'Default Render Device',
-      name: 'Default Render Device',
-      description: 'Default System Output (Fallback)',
+      id: 'Microphone (Realtek(R) Audio)',
+      name: 'Microphone (Realtek(R) Audio)',
+      description: 'Default System Audio (Fallback)',
       nick: 'Default',
-      type: 'output',
+      type: 'audio',
       isDefault: true
     }];
   }
@@ -256,11 +258,13 @@ function startMonitoring(device) {
   activeMonitorDevice = device;
   
   if (isWindows) {
-    const target = device === 'Default Render Device' ? 'Default Render Device' : device;
-    const targetLoopback = `${target} (loopback)`;
+    const winDevices = listDevicesWindows();
+    const dshowDevice = (device && device !== 'Default Render Device' && winDevices.some(d => d.name === device))
+      ? device
+      : (winDevices[0]?.name || 'Microphone (Realtek(R) Audio)');
     activeMonitorProcess = spawn('ffmpeg', [
-      '-f', 'wasapi',
-      '-i', `audio=${targetLoopback}`,
+      '-f', 'dshow',
+      '-i', `audio=${dshowDevice}`,
       '-ac', '2',
       '-ar', '16000',
       '-f', 's16le',
@@ -387,11 +391,13 @@ function startRecording(device, prefix = 'recording') {
   recordedBytes = 0;
   
   if (isWindows) {
-    const target = device === 'Default Render Device' ? 'Default Render Device' : device;
-    const targetLoopback = `${target} (loopback)`;
+    const winDevices = listDevicesWindows();
+    const dshowDevice = (device && device !== 'Default Render Device' && winDevices.some(d => d.name === device))
+      ? device
+      : (winDevices[0]?.name || 'Microphone (Realtek(R) Audio)');
     activeRecordingProcess = spawn('ffmpeg', [
-      '-f', 'wasapi',
-      '-i', `audio=${targetLoopback}`,
+      '-f', 'dshow',
+      '-i', `audio=${dshowDevice}`,
       '-ac', '2',
       '-ar', '44100',
       '-y',
