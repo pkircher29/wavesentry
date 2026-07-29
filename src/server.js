@@ -3,6 +3,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 const fs = require('fs');
+const net = require('net');
 const { spawn, execSync } = require('child_process');
 const os = require('os');
 const isWindows = os.platform() === 'win32';
@@ -609,34 +610,35 @@ wss.on('connection', (ws) => {
   });
 });
 
-function startServer(preferredPort = process.env.PORT || 3000) {
+function getAvailablePort(startingPort) {
   return new Promise((resolve, reject) => {
-    let port = parseInt(preferredPort, 10);
-    
-    function tryListen() {
-      const onError = (err) => {
-        if (err.code === 'EADDRINUSE') {
-          console.warn(`Port ${port} in use, retrying on ${port + 1}...`);
-          port++;
-          server.removeListener('error', onError);
-          setTimeout(tryListen, 50);
-        } else {
-          server.removeListener('error', onError);
-          reject(err);
-        }
-      };
+    const tester = net.createServer();
+    tester.unref();
+    tester.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        resolve(getAvailablePort(startingPort + 1));
+      } else {
+        reject(err);
+      }
+    });
+    tester.listen(startingPort, () => {
+      const { port } = tester.address();
+      tester.close(() => resolve(port));
+    });
+  });
+}
 
-      server.on('error', onError);
+async function startServer(preferredPort = process.env.PORT || 3000) {
+  const targetPort = parseInt(preferredPort, 10);
+  const freePort = await getAvailablePort(targetPort);
 
-      server.listen(port, () => {
-        server.removeListener('error', onError);
-        console.log(`Server is running at http://localhost:${port}`);
-        process.env.WAVESENTRY_PORT = port;
-        resolve(port);
-      });
-    }
-
-    tryListen();
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(freePort, () => {
+      console.log(`Server is running at http://localhost:${freePort}`);
+      process.env.WAVESENTRY_PORT = freePort;
+      resolve(freePort);
+    });
   });
 }
 
