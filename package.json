@@ -1,6 +1,6 @@
 {
   "name": "wavesentry",
-  "version": "1.0.0",
+  "version": "0.6.0",
   "description": "WaveSentry - Audio Output Monitor & Recorder",
   "author": {
     "name": "Paul",
@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node src/server.js",
     "electron": "electron .",
-    "build": "electron-builder build --win --linux"
+    "build": "electron-builder build --win"
   },
   "dependencies": {
     "24": "^0.0.0",
