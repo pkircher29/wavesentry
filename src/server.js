@@ -609,6 +609,39 @@ wss.on('connection', (ws) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Server is running at http://localhost:${PORT}`);
-});
+function startServer(preferredPort = process.env.PORT || 3000) {
+  return new Promise((resolve, reject) => {
+    let port = parseInt(preferredPort, 10);
+    
+    function tryListen() {
+      const onError = (err) => {
+        if (err.code === 'EADDRINUSE') {
+          console.warn(`Port ${port} in use, retrying on ${port + 1}...`);
+          port++;
+          server.removeListener('error', onError);
+          setTimeout(tryListen, 50);
+        } else {
+          server.removeListener('error', onError);
+          reject(err);
+        }
+      };
+
+      server.on('error', onError);
+
+      server.listen(port, () => {
+        server.removeListener('error', onError);
+        console.log(`Server is running at http://localhost:${port}`);
+        process.env.WAVESENTRY_PORT = port;
+        resolve(port);
+      });
+    }
+
+    tryListen();
+  });
+}
+
+if (require.main === module) {
+  startServer().catch(err => console.error('Failed to start server:', err));
+}
+
+module.exports = { app, server, startServer };

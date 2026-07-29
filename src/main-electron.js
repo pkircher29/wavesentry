@@ -1,12 +1,17 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
-
-// Start the Express + WebSocket server
-require('./server.js');
+const { startServer } = require('./server.js');
 
 let mainWindow;
 
-function createWindow() {
+async function createWindow() {
+  let port = 3000;
+  try {
+    port = await startServer();
+  } catch (err) {
+    console.error('Failed to start embedded server:', err);
+  }
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 850,
@@ -18,10 +23,7 @@ function createWindow() {
     }
   });
 
-  // Load the web app served by Express on port 3000 after 1s startup delay
-  setTimeout(() => {
-    mainWindow.loadURL('http://localhost:3000');
-  }, 1000);
+  mainWindow.loadURL(`http://localhost:${port}`);
 
   mainWindow.on('closed', () => {
     mainWindow = null;
