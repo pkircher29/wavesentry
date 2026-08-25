@@ -27,9 +27,71 @@ if (!RECORDINGS_DIR) {
   RECORDINGS_DIR = process.env.RECORDINGS_DIR || path.join(process.cwd(), 'recordings');
 }
 
+const METADATA_FILE = path.join(RECORDINGS_DIR, '.metadata.json');
+
 // Ensure recordings directory exists
 if (!fs.existsSync(RECORDINGS_DIR)) {
   fs.mkdirSync(RECORDINGS_DIR, { recursive: true });
+}
+
+// Helper: Metadata Management
+function loadAllMetadata() {
+  try {
+    if (fs.existsSync(METADATA_FILE)) {
+      const raw = fs.readFileSync(METADATA_FILE, 'utf8');
+      return JSON.parse(raw);
+    }
+  } catch (err) {
+    console.error('Error reading metadata file:', err.message);
+  }
+  return {};
+}
+
+function saveAllMetadata(meta) {
+  try {
+    fs.writeFileSync(METADATA_FILE, JSON.stringify(meta, null, 2), 'utf8');
+    return true;
+  } catch (err) {
+    console.error('Error writing metadata file:', err.message);
+    return false;
+  }
+}
+
+function getRecordingMetadata(filename) {
+  const all = loadAllMetadata();
+  return all[filename] || {
+    title: filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' '),
+    artist: 'System Audio',
+    tags: [],
+    notes: '',
+    favorite: false,
+    updatedAt: Date.now()
+  };
+}
+
+function updateRecordingMetadata(filename, updates) {
+  const all = loadAllMetadata();
+  const current = all[filename] || {
+    title: filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' '),
+    artist: 'System Audio',
+    tags: [],
+    notes: '',
+    favorite: false
+  };
+
+  all[filename] = {
+    ...current,
+    ...updates,
+    updatedAt: Date.now()
+  };
+  saveAllMetadata(all);
+  return all[filename];
+}
+
+function isValidFilename(filename) {
+  if (!filename || typeof filename !== 'string') return false;
+  if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) return false;
+  return /^[a-zA-Z0-9_.\-\s]+$/.test(filename);
 }
 
 // Serve static frontend files
@@ -50,16 +112,52 @@ app.get('/api/recordings', (req, res) => {
   res.json(getRecordingsList());
 });
 
+app.get('/api/recordings/:filename/metadata', (req, res) => {
+  const filename = req.params.filename;
+  if (!isValidFilename(filename)) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+  res.json(getRecordingMetadata(filename));
+});
+
+app.post('/api/recordings/:filename/metadata', (req, res) => {
+  const filename = req.params.filename;
+  if (!isValidFilename(filename)) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+  const { title, artist, tags, notes, favorite } = req.body;
+  const updated = updateRecordingMetadata(filename, {
+    ...(title !== undefined && { title: String(title).trim() }),
+    ...(artist !== undefined && { artist: String(artist).trim() }),
+    ...(tags !== undefined && { tags: Array.isArray(tags) ? tags : [] }),
+    ...(notes !== undefined && { notes: String(notes).trim() }),
+    ...(favorite !== undefined && { favorite: Boolean(favorite) })
+  });
+
+  broadcast({
+    type: 'recordings_list',
+    data: getRecordingsList()
+  });
+
+  res.json({ success: true, metadata: updated });
+});
+
 app.delete('/api/recordings/:filename', (req, res) => {
   const filename = req.params.filename;
-  if (filename.includes('/') || filename.includes('..')) {
+  if (!isValidFilename(filename)) {
     return res.status(400).json({ error: 'Invalid filename' });
   }
   const filePath = path.join(RECORDINGS_DIR, filename);
   try {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
-      // Broadcast updated list to all clients
+      
+      const meta = loadAllMetadata();
+      if (meta[filename]) {
+        delete meta[filename];
+        saveAllMetadata(meta);
+      }
+
       broadcast({
         type: 'recordings_list',
         data: getRecordingsList()
@@ -72,6 +170,72 @@ app.delete('/api/recordings/:filename', (req, res) => {
     console.error('Error deleting file:', err);
     res.status(500).json({ error: 'Failed to delete file' });
   }
+});
+
+// Transcode / Export Audio Endpoint
+app.get('/api/recordings/:filename/export', (req, res) => {
+  const filename = req.params.filename;
+  if (!isValidFilename(filename)) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+
+  const filePath = path.join(RECORDINGS_DIR, filename);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  const format = (req.query.format || 'mp3').toLowerCase();
+  const bitrate = req.query.bitrate || '320k';
+  const baseName = filename.replace(/\.[^/.]+$/, '');
+  const meta = getRecordingMetadata(filename);
+
+  const formatConfig = {
+    mp3: { codec: 'libmp3lame', ext: 'mp3', mime: 'audio/mpeg' },
+    flac: { codec: 'flac', ext: 'flac', mime: 'audio/flac' },
+    aac: { codec: 'aac', ext: 'm4a', mime: 'audio/mp4' },
+    ogg: { codec: 'libvorbis', ext: 'ogg', mime: 'audio/ogg' },
+    wav: { codec: 'pcm_s16le', ext: 'wav', mime: 'audio/wav' }
+  };
+
+  const target = formatConfig[format] || formatConfig.mp3;
+  const outFilename = `${baseName}.${target.ext}`;
+
+  res.setHeader('Content-Disposition', `attachment; filename="${outFilename}"`);
+  res.setHeader('Content-Type', target.mime);
+
+  const ffmpegArgs = ['-i', filePath];
+
+  if (meta.title) ffmpegArgs.push('-metadata', `title=${meta.title}`);
+  if (meta.artist) ffmpegArgs.push('-metadata', `artist=${meta.artist}`);
+  if (meta.notes) ffmpegArgs.push('-metadata', `comment=${meta.notes}`);
+
+  if (target.codec === 'libmp3lame') {
+    ffmpegArgs.push('-c:a', 'libmp3lame', '-b:a', bitrate, '-f', 'mp3', '-');
+  } else if (target.codec === 'flac') {
+    ffmpegArgs.push('-c:a', 'flac', '-f', 'flac', '-');
+  } else if (target.codec === 'aac') {
+    ffmpegArgs.push('-c:a', 'aac', '-b:a', bitrate, '-f', 'adts', '-');
+  } else if (target.codec === 'libvorbis') {
+    ffmpegArgs.push('-c:a', 'libvorbis', '-q:a', '6', '-f', 'ogg', '-');
+  } else {
+    ffmpegArgs.push('-c:a', 'pcm_s16le', '-f', 'wav', '-');
+  }
+
+  const ffmpegProc = spawn('ffmpeg', ffmpegArgs);
+  ffmpegProc.stdout.pipe(res);
+
+  ffmpegProc.on('error', (err) => {
+    console.error('FFmpeg export error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Transcoding failed' });
+    }
+  });
+
+  req.on('close', () => {
+    try {
+      ffmpegProc.kill('SIGKILL');
+    } catch (e) {}
+  });
 });
 
 // State management
@@ -93,7 +257,7 @@ let silenceThresholdLinear = Math.pow(10, -45 / 20);
 let silenceDurationMs = 1000;
 let silenceStartTimestamp = null;
 let isArmedForSound = false;
-let latestLevels = { rmsL: 0, rmsR: 0 };
+let latestLevels = { rmsL: 0, rmsR: 0, peakL: 0, peakR: 0, spectrum: [] };
 
 function getDefaultSink() {
   try {
@@ -109,7 +273,6 @@ function listDevicesLinux() {
   try {
     const dump = JSON.parse(execSync('pw-dump', { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }));
     const defaultSink = getDefaultSink();
-    
     const devices = [];
     
     for (const obj of dump) {
@@ -120,10 +283,7 @@ function listDevicesLinux() {
           const description = obj.info.props['node.description'] || name;
           const nick = obj.info.props['node.nick'] || '';
           
-          let isDefault = false;
-          if (name === defaultSink) {
-            isDefault = true;
-          }
+          let isDefault = (name === defaultSink);
           
           devices.push({
             id: name,
@@ -137,15 +297,21 @@ function listDevicesLinux() {
       }
     }
     
-    // Sort: default devices first
     return devices.sort((a, b) => {
       if (a.isDefault && !b.isDefault) return -1;
       if (!a.isDefault && b.isDefault) return 1;
       return a.description.localeCompare(b.description);
     });
   } catch (err) {
-    console.error('Error listing Linux devices:', err);
-    return [];
+    console.error('Error listing Linux devices:', err.message);
+    return [{
+      id: 'default',
+      name: 'Default Audio Sink',
+      description: 'Default System Audio Sink',
+      nick: 'Default',
+      type: 'output',
+      isDefault: true
+    }];
   }
 }
 
@@ -158,7 +324,15 @@ function listDevicesWindows() {
       output = err.stderr ? err.stderr.toString() : (err.message || '');
     }
     
-    const devices = [];
+    const devices = [{
+      id: 'virtual-audio-capturer',
+      name: 'virtual-audio-capturer',
+      description: 'Default Loopback (virtual-audio-capturer)',
+      nick: 'Default',
+      type: 'output',
+      isDefault: true
+    }];
+    
     const lines = output.split('\n');
     let inAudio = false;
     
@@ -172,43 +346,32 @@ function listDevicesWindows() {
         continue;
       }
       
-      const match = line.match(/\]\s+"([^"]+)"/);
-      if (match) {
-        const name = match[1];
-        const isAudioLine = line.includes('(audio)') || inAudio;
-        if (isAudioLine && !devices.some(d => d.name === name)) {
-          devices.push({
-            id: name,
-            name: name,
-            description: name,
-            nick: name,
-            type: 'audio',
-            isDefault: devices.length === 0
-          });
+      if (inAudio) {
+        const match = line.match(/\]\s+"([^"]+)"/);
+        if (match) {
+          const name = match[1];
+          if (!name.includes('Alternative name') && !devices.some(d => d.name === name)) {
+            devices.push({
+              id: name,
+              name: name,
+              description: name,
+              nick: name,
+              type: 'output',
+              isDefault: false
+            });
+          }
         }
       }
     }
-    
-    if (devices.length === 0) {
-      devices.push({
-        id: 'Microphone (Realtek(R) Audio)',
-        name: 'Microphone (Realtek(R) Audio)',
-        description: 'Default System Audio',
-        nick: 'Default',
-        type: 'audio',
-        isDefault: true
-      });
-    }
-    
     return devices;
   } catch (err) {
-    console.error('Error listing Windows devices:', err);
+    console.error('Error listing Windows devices:', err.message);
     return [{
-      id: 'Microphone (Realtek(R) Audio)',
-      name: 'Microphone (Realtek(R) Audio)',
-      description: 'Default System Audio (Fallback)',
+      id: 'virtual-audio-capturer',
+      name: 'virtual-audio-capturer',
+      description: 'Default Audio Output',
       nick: 'Default',
-      type: 'audio',
+      type: 'output',
       isDefault: true
     }];
   }
@@ -225,21 +388,29 @@ function listDevices() {
 function getRecordingsList() {
   try {
     const files = fs.readdirSync(RECORDINGS_DIR);
+    const metaMap = loadAllMetadata();
+
     return files
-      .filter(file => file.endsWith('.wav'))
+      .filter(file => file.endsWith('.wav') || file.endsWith('.mp3') || file.endsWith('.flac'))
       .map(file => {
         const filePath = path.join(RECORDINGS_DIR, file);
         const stats = fs.statSync(filePath);
+        const meta = metaMap[file] || {};
         return {
           filename: file,
           sizeBytes: stats.size,
           createdAt: stats.birthtimeMs || stats.mtimeMs,
-          path: `/recordings/${file}`
+          path: `/recordings/${file}`,
+          title: meta.title || file.replace(/\.[^/.]+$/, '').replace(/_/g, ' '),
+          artist: meta.artist || 'System Audio',
+          tags: meta.tags || [],
+          notes: meta.notes || '',
+          favorite: Boolean(meta.favorite)
         };
       })
       .sort((a, b) => b.createdAt - a.createdAt);
   } catch (err) {
-    console.error('Error listing recordings:', err);
+    console.error('Error listing recordings:', err.message);
     return [];
   }
 }
@@ -254,18 +425,39 @@ function stopMonitoring() {
   activeMonitorDevice = null;
 }
 
+function computeSpectrum(slice, frameSize) {
+  const bands = 16;
+  const energies = new Array(bands).fill(0);
+  const sampleCount = Math.floor(slice.length / frameSize);
+  if (sampleCount === 0) return energies;
+
+  const bandSize = Math.max(1, Math.floor(sampleCount / bands));
+  for (let b = 0; b < bands; b++) {
+    let sum = 0;
+    let count = 0;
+    const start = b * bandSize * frameSize;
+    const end = Math.min(slice.length, (b + 1) * bandSize * frameSize);
+    for (let i = start; i < end; i += frameSize) {
+      const valL = slice.readInt16LE(i) / 32768.0;
+      const valR = slice.readInt16LE(i + 2) / 32768.0;
+      sum += (Math.abs(valL) + Math.abs(valR)) / 2;
+      count++;
+    }
+    const weight = 1.0 + (b * 0.08);
+    energies[b] = count > 0 ? Math.min(1.0, (sum / count) * weight * 1.5) : 0;
+  }
+  return energies;
+}
+
 function startMonitoring(device) {
   stopMonitoring();
   activeMonitorDevice = device;
   
   if (isWindows) {
-    const winDevices = listDevicesWindows();
-    const dshowDevice = (device && device !== 'Default Render Device' && winDevices.some(d => d.name === device))
-      ? device
-      : (winDevices[0]?.name || 'Microphone (Realtek(R) Audio)');
+    const target = device === 'virtual-audio-capturer' ? 'virtual-audio-capturer' : device;
     activeMonitorProcess = spawn('ffmpeg', [
       '-f', 'dshow',
-      '-i', `audio=${dshowDevice}`,
+      '-i', `audio=${target}`,
       '-ac', '2',
       '-ar', '16000',
       '-f', 's16le',
@@ -273,7 +465,6 @@ function startMonitoring(device) {
       '-'
     ]);
   } else {
-    // Format is s16, rate is 16000, 2 channels, output to stdout (-)
     activeMonitorProcess = spawn('pw-record', [
       '--properties', 'stream.capture.sink=true',
       '--target', device,
@@ -288,8 +479,8 @@ function startMonitoring(device) {
   
   activeMonitorProcess.stdout.on('data', (chunk) => {
     buffer = Buffer.concat([buffer, chunk]);
-    const frameSize = 4; // 16-bit stereo = 2 bytes * 2 channels
-    const chunkSize = 512 * frameSize; // 512 samples per chunk (32ms at 16kHz)
+    const frameSize = 4; // 16-bit stereo
+    const chunkSize = 512 * frameSize; // 512 samples
     
     while (buffer.length >= chunkSize) {
       const slice = buffer.slice(0, chunkSize);
@@ -317,9 +508,9 @@ function startMonitoring(device) {
       
       const rmsL = Math.sqrt(sumSqL / sampleCount);
       const rmsR = Math.sqrt(sumSqR / sampleCount);
+      const spectrum = computeSpectrum(slice, frameSize);
       
-      latestLevels.rmsL = rmsL;
-      latestLevels.rmsR = rmsR;
+      latestLevels = { rmsL, rmsR, peakL: maxL, peakR: maxR, spectrum };
       
       const maxRms = Math.max(rmsL, rmsR);
       
@@ -353,7 +544,8 @@ function startMonitoring(device) {
           peakL: maxL,
           peakR: maxR,
           rmsL: rmsL,
-          rmsR: rmsR
+          rmsR: rmsR,
+          spectrum: spectrum
         }
       });
     }
@@ -365,9 +557,7 @@ function startMonitoring(device) {
     broadcastStatus();
   });
   
-  activeMonitorProcess.stderr.on('data', (err) => {
-    console.error("Monitor stderr:", err.toString());
-  });
+  activeMonitorProcess.stderr.on('data', () => {});
 }
 
 function startRecording(device, prefix = 'recording') {
@@ -375,12 +565,10 @@ function startRecording(device, prefix = 'recording') {
     stopRecording();
   }
   
-  // Ensure we are monitoring this device to calculate levels and silence detection
   if (activeMonitorDevice !== device) {
     startMonitoring(device);
   }
   
-  // Create safe prefix
   const safePrefix = prefix.trim().replace(/[^a-zA-Z0-9_-]/g, '_') || 'recording';
   const dateStr = new Date().toISOString().replace(/T/, '_').replace(/\..+/, '').replace(/:/g, '-');
   const filename = `${safePrefix}_${dateStr}.wav`;
@@ -392,20 +580,16 @@ function startRecording(device, prefix = 'recording') {
   recordedBytes = 0;
   
   if (isWindows) {
-    const winDevices = listDevicesWindows();
-    const dshowDevice = (device && device !== 'Default Render Device' && winDevices.some(d => d.name === device))
-      ? device
-      : (winDevices[0]?.name || 'Microphone (Realtek(R) Audio)');
+    const target = device === 'virtual-audio-capturer' ? 'virtual-audio-capturer' : device;
     activeRecordingProcess = spawn('ffmpeg', [
       '-f', 'dshow',
-      '-i', `audio=${dshowDevice}`,
+      '-i', `audio=${target}`,
       '-ac', '2',
       '-ar', '44100',
       '-y',
       filePath
     ]);
   } else {
-    // Record standard high quality: s16, 44100Hz, stereo
     activeRecordingProcess = spawn('pw-record', [
       '--properties', 'stream.capture.sink=true',
       '--target', device,
@@ -420,7 +604,6 @@ function startRecording(device, prefix = 'recording') {
     console.error("Recording stderr:", err.toString());
   });
   
-  // Update progress every second
   recordingTimer = setInterval(() => {
     if (fs.existsSync(filePath)) {
       const stats = fs.statSync(filePath);
@@ -461,7 +644,7 @@ function startRecording(device, prefix = 'recording') {
 function stopRecording() {
   if (activeRecordingProcess) {
     try {
-      activeRecordingProcess.kill('SIGTERM'); // Terminate cleanly to save WAV header
+      activeRecordingProcess.kill('SIGTERM');
     } catch (e) {}
     activeRecordingProcess = null;
   }
@@ -500,7 +683,6 @@ function broadcastStatus() {
 
 // WebSocket Server Events
 wss.on('connection', (ws) => {
-  // Send initial data to client
   ws.send(JSON.stringify({
     type: 'devices',
     data: listDevices()
@@ -560,7 +742,6 @@ wss.on('connection', (ws) => {
               silenceDurationMs = Number(msg.params.silenceDurationMs) || 1000;
               silenceThresholdLinear = Math.pow(10, silenceThresholdDb / 20);
               
-              // Ensure we are monitoring this device to inspect levels
               if (activeMonitorDevice !== targetRecordingDevice) {
                 startMonitoring(targetRecordingDevice);
               }
@@ -603,7 +784,6 @@ wss.on('connection', (ws) => {
   });
   
   ws.on('close', () => {
-    // If no client is active, stop monitoring to conserve resources
     if (wss.clients.size === 0) {
       stopMonitoring();
     }
@@ -635,7 +815,7 @@ async function startServer(preferredPort = process.env.PORT || 3000) {
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(freePort, () => {
-      console.log(`Server is running at http://localhost:${freePort}`);
+      console.log(`WaveSentry Pro running at http://localhost:${freePort}`);
       process.env.WAVESENTRY_PORT = freePort;
       resolve(freePort);
     });
@@ -646,4 +826,19 @@ if (require.main === module) {
   startServer().catch(err => console.error('Failed to start server:', err));
 }
 
-module.exports = { app, server, startServer };
+module.exports = {
+  app,
+  server,
+  wss,
+  startServer,
+  getAvailablePort,
+  listDevices,
+  listDevicesLinux,
+  listDevicesWindows,
+  getRecordingsList,
+  getRecordingMetadata,
+  updateRecordingMetadata,
+  computeSpectrum,
+  isValidFilename,
+  RECORDINGS_DIR
+};

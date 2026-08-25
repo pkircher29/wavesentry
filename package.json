@@ -1,22 +1,21 @@
 {
   "name": "wavesentry",
-  "version": "0.6.4",
-  "description": "WaveSentry - Audio Output Monitor & Recorder",
+  "version": "1.1.0",
+  "description": "WaveSentry - Audio Output Monitor & Recorder with Multi-Format Export, Spectral Analysis & Metadata Studio",
   "author": {
     "name": "Paul",
-    "email": "paul@example.com"
+    "email": "pkircher@gmail.com"
   },
-  "homepage": "https://github.com/paul/wavesentry",
+  "homepage": "https://github.com/pkircher29/wavesentry",
   "main": "src/main-electron.js",
   "scripts": {
     "start": "node src/server.js",
+    "test": "node --test test/**/*.test.js",
     "electron": "electron .",
-    "build": "electron-builder build --win"
+    "build": "electron-builder build --win --linux"
   },
   "dependencies": {
-    "24": "^0.0.0",
     "express": "^5.2.1",
-    "node.js": "^0.0.1-security",
     "ws": "^8.21.0"
   },
   "devDependencies": {
@@ -48,7 +47,7 @@
         "AppImage",
         "deb"
       ],
-      "maintainer": "Paul <paul@example.com>",
+      "maintainer": "Paul <pkircher@gmail.com>",
       "category": "Audio"
     }
   }

@@ -1,135 +1,103 @@
-# WaveSentry
+# WaveSentry Pro 🌊🎧
 
-WaveSentry is a high-performance, professional desktop audio dashboard designed to **monitor and record system audio output channels** on both Linux and Windows. Packageable as a native desktop application using Electron, it captures loopback system audio directly from your sound card, visualizes levels in real-time, and features silence detection to split tracks automatically.
+**High-Performance Audio Output Monitor, Recorder, Spectral Analyzer & Transcoder**
+
+WaveSentry is a desktop audio workstation designed to monitor, capture, analyze, tag, and transcode system audio loopback channels on both **Linux** (PipeWire / PulseAudio) and **Windows** (DirectShow / WASAPI loopback).
 
 ---
 
 ## ✨ Features
 
 *   **Native Cross-Platform Audio Capture**:
-    *   **Linux (PipeWire)**: Interacts natively with `pw-record` and `pw-dump` to capture mixed output from audio sinks (speakers/headphones) with zero microphone leakage.
-    *   **Windows (WASAPI)**: Integrates with `ffmpeg` loopback recording to capture render output streams natively (bypassing the need for virtual cables or "Stereo Mix" settings).
-*   **Silence Detection & Auto-Split**:
-    *   Set custom threshold ($dB$) and duration ($seconds$) values.
-    *   Automatically closes and saves the active recording WAV file when silence is detected, transitioning into an `Armed` state.
-    *   Resumes recording into a new timestamped file automatically as soon as sound begins playing again.
-*   **Low-Latency Studio Visualizers**:
-    *   Sleek stereo LED VU meters displaying Peak & RMS values, complete with slow decay fallbacks resembling physical hardware.
-    *   Real-time scrolling waveform canvas illustrating amplitude history.
-    *   Monospaced segment clock displaying recording durations or `WAITING` status.
-*   **Custom Audio Playback Library**:
-    *   Lists captured audio files with file details (size, duration, creation dates).
-    *   Features a custom-styled seekable audio player, allowing you to instantly play, download, or delete recordings from the local library.
+    *   **Linux (PipeWire)**: Interacts natively with `pw-record` and `pw-dump` to capture mixed output from audio sinks (speakers, headphones, virtual streams).
+    *   **Windows (DirectShow / WASAPI)**: Audio loopback capture via background `ffmpeg` engine.
+*   **Dual-Mode Real-Time Visualizer**:
+    *   **Oscilloscope Waveform**: Glowing cyber amplitude waveform history.
+    *   **16-Band Spectral FFT Analyzer**: Real-time frequency equalizer bars with peak hold decay and clipping indicators.
+*   **Studio Precision VU Metering**:
+    *   Stereo Left & Right level meters with peak hold indicators, continuous numerical `-dBFS` readouts, and active `CLIP` overload warnings.
+*   **Multi-Format Transcoder Engine**:
+    *   Instant on-the-fly export to **MP3** (up to 320kbps), **FLAC** (lossless), **AAC / M4A**, **OGG Vorbis**, and original **WAV**.
+*   **Track Metadata Studio**:
+    *   In-app metadata editor for track title, artist, custom tags, and session notes stored in `.metadata.json` and embedded in audio export ID3 tags.
+*   **Smart Auto-Split on Silence**:
+    *   Continuous hands-free recording with automatic segment splitting based on customizable dB threshold (-60dB to -25dB) and silence duration (0.5s to 5.0s).
+*   **Integrated Vault Audio Player**:
+    *   Built-in playback scrubber, speed adjustments (`0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `2.0x`), +/- 5s skip buttons, volume slider, and instant search filter.
+*   **Keyboard Shortcuts**:
+    *   `Space` / `Ctrl+R`: Start/Stop Recording
+    *   `M`: Toggle Live VU Monitoring
+    *   `V`: Toggle Visualizer Mode (Waveform / Spectrum FFT)
+    *   `P`: Play/Pause Selected Track
+    *   `Esc`: Close Modals
+    *   `?`: Open Shortcuts Cheat Sheet
 
 ---
 
-## 📁 Repository Structure
+## ⌨️ Keyboard Shortcuts
 
-```text
-wavesentry/
-├── public/                 # Frontend Web Assets
-│   ├── index.html          # Semantic HTML5 Dashboard Structure
-│   ├── style.css           # Premium Dark-Carbon Glassmorphic Theme
-│   └── app.js              # WebSockets, VU Meter Decay, and Player Controller
-├── src/                    # Backend Source Files
-│   ├── server.js           # Express/WebSocket Audio Streaming & Recording Core
-│   └── main-electron.js    # Electron Window Lifecycle Entrypoint
-├── recordings/             # Saved High-Fidelity WAV Files (Local-only)
-├── package.json            # Electron-Builder Configurations & Scripts
-└── README.md               # Project documentation
-```
+| Shortcut | Action |
+| :--- | :--- |
+| <kbd>Space</kbd> / <kbd>Ctrl+R</kbd> | Toggle Recording Start / Stop |
+| <kbd>M</kbd> | Toggle Audio Monitoring |
+| <kbd>V</kbd> | Switch Visualizer Mode (Waveform &harr; FFT Spectrum) |
+| <kbd>P</kbd> | Play / Pause Selected Vault Track |
+| <kbd>Esc</kbd> | Dismiss Active Modal |
+| <kbd>?</kbd> | Open Shortcuts Reference |
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Start
 
-### 📋 Prerequisites
-*   **Node.js**: Version 16 or newer.
-*   **FFmpeg** (For Windows or custom Linux capture): Ensure `ffmpeg` is installed and available in your system `PATH`.
-*   **PipeWire** (For Linux): Standard on modern Linux distros (Ubuntu 22.04+, Fedora, Arch).
+### Prerequisites
+*   **Node.js** 18+ (tested on Node 18, 20, 22)
+*   **FFmpeg** installed on your system PATH (used for WASAPI/DirectShow recording on Windows and on-the-fly multi-format transcoding)
+*   **PipeWire** (`pw-record`, `pw-dump`, `wpctl`) for Linux
 
-### 🛠️ Installation
-Clone the repository and install npm dependencies:
+### Installation & Run
+
 ```bash
+# Clone the repository
+git clone https://github.com/pkircher29/wavesentry.git
+cd wavesentry
+
+# Install dependencies
 npm install
+
+# Run the web dashboard
+npm start
+
+# Run the Electron desktop app
+npm run electron
 ```
 
-### 💻 Running the App
+Open your browser at `http://localhost:3000`.
 
-*   **Development Mode (Server Only)**:
-    Runs the Express backend and serves the frontend locally at `http://localhost:3000`:
-    ```bash
-    npm start
-    ```
-*   **Desktop App Mode (Electron)**:
-    Launches the application inside a native Electron desktop window wrapper:
-    ```bash
-    npm run electron
-    ```
+---
 
-### 📦 Compiling Desktop Installers
-WaveSentry uses `electron-builder` to package the app into single-file installers. 
+## 🧪 Testing
 
-To package the application for your host system:
+WaveSentry includes a test suite using Node.js native test runner:
+
 ```bash
-npm run build
-```
-
-This compiles target binaries into the `dist/` directory:
-*   **Linux**: Compiles to `.deb` package installer and `.AppImage` portable bundle.
-*   **Windows**: Compiles to a portable `.zip` archive containing `WaveSentry.exe` (can build a native `.exe` installer when built on a Windows host).
-
----
-
-## 📈 System Sequence Flow
-
-```mermaid
-sequenceDiagram
-    participant OS as Operating System
-    participant Server as Backend Core (server.js)
-    participant PW_FF as pw-record / ffmpeg
-
-    Note over Server: startRecording triggered
-    alt is Linux
-        Server->>PW_FF: Spawn: pw-record --properties stream.capture.sink=true
-    else is Windows
-        Server->>PW_FF: Spawn: ffmpeg -f wasapi -i audio="Default Render Device (loopback)"
-    end
-    
-    PW_FF->>OS: Capture hardware loopback audio
-    loop Live Level Loop (~32ms chunks)
-        PW_FF->>Server: Raw PCM S16 bytes (stdout)
-        Server->>Server: Calculate Peak & RMS levels
-        Server->>Server: Check Silence Split Settings
-    end
+npm test
 ```
 
 ---
 
-## ⚙️ Silence Auto-Split Logic
+## 📡 REST API & WebSocket
 
-```
-   [Record Button Triggered]
-              │
-              ▼
-   Is Audio Active?
-    ├── Yes ──> [Start WAV File] ──> [Recording Audio]
-    │                                       │
-    │                                       ▼
-    │                              Silence Detected?
-    │                               ├── Yes (>= 1.0s) ──> [Stop WAV File] ──> [Enter Armed State]
-    │                               └── No ───────────────────────────────────────────┘
-    │
-    └── No ───> [Enter Armed State (WAITING)]
-                       │
-                       ▼
-                 Audio Resumes?
-                    ├── Yes ──> [Start New WAV File] ──> [Recording Audio]
-                    └── No ──────────────────────────────────┘
-```
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/devices` | GET | List available audio sinks and default device |
+| `/api/recordings` | GET | List recorded files enriched with metadata |
+| `/api/recordings/:filename` | DELETE | Delete recording and metadata |
+| `/api/recordings/:filename/metadata` | GET / POST | Get or update track title, artist, tags, and notes |
+| `/api/recordings/:filename/export` | GET | Transcode and stream audio (`?format=mp3&bitrate=320k`) |
+| `/` | WS | Real-time level telemetry, spectrum FFT, status, and recording progress |
 
 ---
 
-## 📝 License & Authors
-Created by **Paul Kircher** (`pkircher@gmail.com`). 
-Licensed under the MIT License.
+## 📄 License
+
+MIT License.
