@@ -10,7 +10,7 @@
   "main": "src/main-electron.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test test/**/*.test.js",
+    "test": "node --test",
     "electron": "electron .",
     "build": "electron-builder build --win --linux"
   },
