@@ -23,7 +23,7 @@ async function createWindow() {
     }
   });
 
-  mainWindow.loadURL(`http://localhost:${port}`);
+  mainWindow.loadURL(`http://127.0.0.1:${port}`);
 
   mainWindow.on('closed', () => {
     mainWindow = null;

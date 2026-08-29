@@ -32,6 +32,7 @@ let clipTimerR = null;
 let allRecordings = [];
 let activeTrack = null;
 let activeExportFilename = null;
+let integrationStatus = { breakWavePublishConfigured: false };
 
 // Resize Canvas
 function resizeCanvas() {
@@ -205,6 +206,22 @@ function formatBytes(bytes) {
   return `${mb.toFixed(2)} MB`;
 }
 
+function showMessage(message, isError = false) {
+  window.alert(`${isError ? 'Error: ' : ''}${message}`);
+}
+
+async function loadIntegrationStatus() {
+  try {
+    const response = await fetch('/api/integration');
+    if (!response.ok) throw new Error('Integration status unavailable');
+    integrationStatus = await response.json();
+    renderRecordingsList();
+  } catch (error) {
+    integrationStatus = { breakWavePublishConfigured: false };
+    console.error('Unable to load Break-Wave integration status:', error);
+  }
+}
+
 // WebSocket Connection
 function connectWebSocket() {
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -223,6 +240,7 @@ function connectWebSocket() {
     document.getElementById('device-select').removeAttribute('disabled');
     document.getElementById('monitor-toggle-btn').removeAttribute('disabled');
     document.getElementById('record-btn').removeAttribute('disabled');
+    void loadIntegrationStatus();
   };
   
   ws.onclose = () => {
@@ -262,6 +280,12 @@ function connectWebSocket() {
           document.getElementById('timer-display').textContent = formatDuration(msg.data.durationSeconds);
           document.getElementById('record-size').textContent = formatBytes(msg.data.sizeBytes);
           break;
+        case 'recording_complete':
+          showMessage(`Saved owned recording: ${msg.data.filename}`);
+          break;
+        case 'error':
+          showMessage(msg.data && msg.data.message ? msg.data.message : 'Audio operation failed', true);
+          break;
       }
     } catch (e) {
       console.error('Error handling WebSocket message:', e);
@@ -274,7 +298,7 @@ function populateDevices(devices) {
   select.innerHTML = '';
   
   if (!devices || devices.length === 0) {
-    select.innerHTML = '<option value="" disabled selected>No audio sinks detected</option>';
+    select.innerHTML = '<option value="" disabled selected>No dedicated audio inputs detected</option>';
     return;
   }
   
@@ -312,12 +336,19 @@ function updateStatus(status) {
       recordBtn.className = 'btn btn-record armed';
       recordBtnText.textContent = 'Armed: Waiting for Sound...';
       recordIndicator.className = 'recording-indicator-pulse armed';
+    } else if (status.recordingState === 'finalizing') {
+      recordBtn.className = 'btn btn-record recording';
+      recordBtn.disabled = true;
+      recordBtnText.textContent = 'Finalizing WAV...';
+      recordIndicator.className = 'recording-indicator-pulse';
     } else {
+      recordBtn.disabled = false;
       recordBtn.className = 'btn btn-record recording';
       recordBtnText.textContent = 'Stop Recording (Space)';
       recordIndicator.className = 'recording-indicator-pulse active';
     }
   } else {
+    recordBtn.disabled = false;
     recordBtn.className = 'btn btn-record';
     recordBtnText.textContent = 'Start Recording (Space)';
     recordIndicator.className = 'recording-indicator-pulse';
@@ -348,7 +379,7 @@ function renderRecordingsList() {
       <div class="empty-state">
         <div class="empty-icon">📁</div>
         <p>${query ? 'No matching recordings found' : 'No recordings yet.'}</p>
-        <p class="empty-subtext">${query ? 'Try a different search keyword.' : 'Captured system audio files will appear here.'}</p>
+        <p class="empty-subtext">${query ? 'Try a different search keyword.' : 'Owned-input recordings will appear here.'}</p>
       </div>
     `;
     return;
@@ -377,7 +408,7 @@ function renderRecordingsList() {
           ${rec.favorite ? '<span class="rec-star">★</span>' : ''}
         </div>
         <div class="rec-meta-row">
-          <span class="rec-artist">${escapeHtml(rec.artist || 'System Audio')}</span>
+          <span class="rec-artist">${escapeHtml(rec.artist || 'Unknown Artist')}</span>
           <span class="rec-divider">•</span>
           <span class="rec-date">${dateStr}</span>
           <span class="rec-divider">•</span>
@@ -391,6 +422,9 @@ function renderRecordingsList() {
         </button>
         <button class="btn-rec-action export-btn" title="Export / Transcode">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        </button>
+        <button class="btn-rec-action publish-btn" title="${rec.publishEligible ? 'Copy to configured Auto-KJ Break-Wave folder' : 'Only owned-input recordings can be published'}" ${(!rec.publishEligible || !integrationStatus.breakWavePublishConfigured) ? 'disabled' : ''}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/></svg>
         </button>
         <button class="btn-rec-action delete-btn" title="Delete Recording">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
@@ -412,6 +446,11 @@ function renderRecordingsList() {
     item.querySelector('.export-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       openExportModal(rec);
+    });
+
+    item.querySelector('.publish-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!e.currentTarget.disabled) await publishRecording(rec);
     });
 
     item.querySelector('.delete-btn').addEventListener('click', async (e) => {
@@ -446,10 +485,10 @@ function playTrack(rec) {
   activeTrack = rec;
   playerPanel.classList.remove('hidden');
   document.getElementById('player-title').textContent = rec.title || rec.filename;
-  document.getElementById('player-artist').textContent = rec.artist || 'System Audio';
+  document.getElementById('player-artist').textContent = rec.artist || 'Unknown Artist';
   document.getElementById('player-filename').textContent = rec.filename;
 
-  audio.src = `/recordings/${rec.filename}`;
+  audio.src = `/recordings/${encodeURIComponent(rec.filename)}`;
   audio.playbackRate = parseFloat(playerSpeed.value) || 1.0;
   audio.play();
   playIcon.classList.add('hidden');
@@ -601,6 +640,21 @@ async function deleteRecording(filename) {
   }
 }
 
+async function publishRecording(recording) {
+  try {
+    const response = await fetch(`/api/recordings/${encodeURIComponent(recording.filename)}/publish`, {
+      method: 'POST'
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(result.error || 'Break-Wave publish failed');
+    }
+    showMessage(`Copied to Auto-KJ Break-Wave as ${result.filename}. The WaveSentry source was preserved.`);
+  } catch (error) {
+    showMessage(error.message || 'Break-Wave publish failed', true);
+  }
+}
+
 // Visualizer Mode Toggles
 document.getElementById('viz-mode-wave').addEventListener('click', () => {
   vizMode = 'wave';
@@ -673,7 +727,8 @@ function toggleRecording() {
   if (currentStatus.recording) {
     ws.send(JSON.stringify({ command: 'stop_recording' }));
   } else {
-    const prefix = document.getElementById('filename-prefix').value || 'sys_output';
+    const artist = document.getElementById('recording-artist').value || 'Unknown Artist';
+    const title = document.getElementById('recording-title').value || 'Owned Recording';
     const autoSplit = autoSplitToggle.checked;
     const thresh = thresholdSlider.value;
     const dur = durationSlider.value * 1000;
@@ -682,7 +737,8 @@ function toggleRecording() {
       command: 'start_recording',
       params: {
         device: selectedDevice,
-        prefix: prefix,
+        artist: artist,
+        title: title,
         autoSplitEnabled: autoSplit,
         silenceThresholdDb: thresh,
         silenceDurationMs: dur
