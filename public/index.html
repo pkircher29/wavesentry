@@ -3,12 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Professional desktop audio dashboard to monitor, record, analyze and export system audio.">
-  <title>WaveSentry Pro - Audio Output Monitor, Recorder & Transcoder</title>
-  <!-- Google Fonts for high-end cyber-audio look -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <meta name="description" content="Desktop recorder for dedicated audio inputs and owned-source Break-Wave handoff.">
+  <title>WaveSentry Pro - Owned Audio Input Recorder</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,7 +14,7 @@
       <div class="logo-area">
         <div class="logo-icon"></div>
         <h1 class="app-title">WaveSentry <span class="badge-pro">PRO</span></h1>
-        <span class="app-subtitle">Audio Capture & Transcode Hub</span>
+        <span class="app-subtitle">Owned Audio Capture & Break-Wave Handoff</span>
       </div>
       <div class="header-actions">
         <button id="shortcuts-btn" class="btn-icon-secondary" title="Keyboard Shortcuts (?)">
@@ -37,7 +33,7 @@
       <section class="dashboard-panel control-section">
         <div class="panel-header">
           <h2 class="panel-title">Capture & Live Feed</h2>
-          <span class="panel-indicator">SYSTEM MONITOR</span>
+          <span class="panel-indicator">DEDICATED INPUT</span>
         </div>
 
         <div class="panel-content">
@@ -50,7 +46,7 @@
               </select>
               <div class="select-arrow"></div>
             </div>
-            <p class="control-tip">Select any output sink (monitor) or loopback device.</p>
+            <p class="control-tip">Select a microphone, line input, mixer, or USB audio interface you control.</p>
           </div>
 
           <!-- Monitoring & Level Meters -->
@@ -120,10 +116,18 @@
               <div id="recording-indicator" class="recording-indicator-pulse"></div>
             </div>
             
-            <div class="filename-input-group">
-              <label for="filename-prefix" class="control-label small">Session Prefix</label>
-              <input type="text" id="filename-prefix" class="custom-input" value="sys_output" placeholder="e.g., meeting, livestream, music">
+            <div class="track-metadata-inputs">
+              <div class="filename-input-group">
+                <label for="recording-artist" class="control-label small">Artist</label>
+                <input type="text" id="recording-artist" class="custom-input" value="Unknown Artist" maxlength="80" placeholder="Artist name">
+              </div>
+              <div class="filename-input-group">
+                <label for="recording-title" class="control-label small">Title</label>
+                <input type="text" id="recording-title" class="custom-input" value="Owned Recording" maxlength="80" placeholder="Track title">
+              </div>
             </div>
+
+            <p class="ownership-notice">Use only an owned or authorized physical input. WaveSentry does not support capturing or ripping streaming services.</p>
 
             <!-- Auto Split Settings -->
             <div class="auto-split-group">
@@ -193,7 +197,7 @@
             <div class="player-header">
               <div class="player-track-info">
                 <span id="player-title" class="player-title">Track Title</span>
-                <span id="player-artist" class="player-artist">System Audio</span>
+                <span id="player-artist" class="player-artist">Unknown Artist</span>
                 <span id="player-filename" class="player-filename">recording_12345.wav</span>
               </div>
               <div class="player-speed-control">
@@ -249,6 +253,7 @@
               <p class="empty-subtext">Recordings you capture will show up here.</p>
             </div>
           </div>
+          <p class="break-wave-notice"><strong>Auto-KJ:</strong> Import purchased files directly to Auto-KJ whenever possible. “Publish” copies an eligible owned-input WAV to the server-configured Break-Wave folder; it never moves or deletes the source.</p>
         </div>
       </section>
     </main>
@@ -258,7 +263,7 @@
       <div class="footer-info">
         <span>Backend: <strong id="server-url">ws://localhost:3000</strong></span>
         <span class="footer-divider">|</span>
-        <span>Engine: <strong>PipeWire / WASAPI Loopback</strong></span>
+        <span>Engine: <strong>PipeWire / DirectShow Dedicated Input</strong></span>
         <span class="footer-divider">|</span>
         <span>Transcoder: <strong>FFmpeg Enabled (MP3, FLAC, AAC, OGG)</strong></span>
       </div>
@@ -321,7 +326,7 @@
 
         <div class="modal-form-group">
           <label for="meta-artist" class="control-label small">Artist / Source</label>
-          <input type="text" id="meta-artist" class="custom-input" placeholder="System Audio / Spotify / Discord">
+          <input type="text" id="meta-artist" class="custom-input" placeholder="Artist or authorized source">
         </div>
 
         <div class="modal-form-group">

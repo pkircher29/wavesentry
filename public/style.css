@@ -539,6 +539,27 @@ body {
   gap: 6px;
 }
 
+.track-metadata-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ownership-notice,
+.break-wave-notice {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  background: rgba(6, 182, 212, 0.06);
+  border-radius: 8px;
+  padding: 9px 11px;
+}
+
+.break-wave-notice {
+  margin-top: 4px;
+}
+
 .custom-input {
   background: var(--bg-dark);
   color: var(--text-primary);
@@ -1413,6 +1434,20 @@ body {
 .btn-rec-action.delete-btn:hover {
   background: rgba(239, 68, 68, 0.2);
   color: var(--vu-red);
+}
+
+.btn-rec-action.publish-btn {
+  color: var(--accent-cyan);
+}
+
+.btn-rec-action.publish-btn:hover {
+  background: rgba(6, 182, 212, 0.16);
+}
+
+.btn-rec-action.publish-btn:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.35;
 }
 
 .player-track-info {

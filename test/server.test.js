@@ -9,6 +9,8 @@ const {
   updateRecordingMetadata,
   computeSpectrum,
   listDevices,
+  parsePipeWireInputDevices,
+  parseWindowsAudioInputDevices,
   getRecordingsList,
   RECORDINGS_DIR
 } = require('../src/server.js');
@@ -32,6 +34,7 @@ describe('WaveSentry Pro Backend Suite', () => {
       assert.equal(isValidFilename('recording_2026-08-25.wav'), true);
       assert.equal(isValidFilename('sample-audio.mp3'), true);
       assert.equal(isValidFilename('My Recording 01.flac'), true);
+      assert.equal(isValidFilename('Artist - Wait... What [abc123].wav'), true);
     });
 
     it('should reject directory traversal attacks', () => {
@@ -48,7 +51,8 @@ describe('WaveSentry Pro Backend Suite', () => {
     it('should retrieve default metadata for new file', () => {
       const meta = getRecordingMetadata('brand_new_track.wav');
       assert.equal(meta.title, 'brand new track');
-      assert.equal(meta.artist, 'System Audio');
+      assert.equal(meta.artist, 'Unknown Artist');
+      assert.equal(meta.sourceKind, 'unknown');
       assert.deepEqual(meta.tags, []);
     });
 
@@ -98,8 +102,32 @@ describe('WaveSentry Pro Backend Suite', () => {
     it('should list available audio devices gracefully', () => {
       const devices = listDevices();
       assert.ok(Array.isArray(devices));
-      assert.ok(devices.length > 0);
-      assert.ok(devices[0].name);
+      devices.forEach(device => {
+        assert.ok(device.name);
+        assert.equal(device.type, 'input');
+        assert.equal(device.captureMode, 'owned_input');
+      });
+    });
+
+    it('should include physical PipeWire sources and exclude sink monitors', () => {
+      const devices = parsePipeWireInputDevices([
+        { info: { props: { 'media.class': 'Audio/Source', 'node.name': 'alsa_input.usb-mixer', 'node.description': 'USB Mixer' } } },
+        { info: { props: { 'media.class': 'Audio/Source', 'node.name': 'alsa_output.pci.monitor', 'node.description': 'Monitor of Speakers' } } },
+        { info: { props: { 'media.class': 'Audio/Sink', 'node.name': 'alsa_output.pci', 'node.description': 'Speakers' } } }
+      ], 'alsa_input.usb-mixer');
+      assert.deepEqual(devices.map(device => device.id), ['alsa_input.usb-mixer']);
+      assert.equal(devices[0].isDefault, true);
+    });
+
+    it('should include DirectShow inputs and exclude known system-loopback devices', () => {
+      const output = [
+        '[dshow] DirectShow audio devices',
+        '[dshow]  "Microphone (USB Mixer)"',
+        '[dshow]  "Stereo Mix (Realtek)"',
+        '[dshow]  "virtual-audio-capturer"'
+      ].join('\n');
+      const devices = parseWindowsAudioInputDevices(output);
+      assert.deepEqual(devices.map(device => device.id), ['Microphone (USB Mixer)']);
     });
   });
 });
