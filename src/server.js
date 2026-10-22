@@ -117,6 +117,60 @@ function updateRecordingMetadata(filename, updates) {
   return all[filename];
 }
 
+function deleteRecordingMetadata(filename) {
+  const all = loadAllMetadata();
+  if (Object.hasOwn(all, filename)) {
+    delete all[filename];
+    return saveAllMetadata(all);
+  }
+  return true;
+}
+
+function readWavDurationSeconds(filePath, fallbackSizeBytes = 0) {
+  let fd = null;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    const header = Buffer.alloc(128);
+    const bytesRead = fs.readSync(fd, header, 0, header.length, 0);
+    if (bytesRead < 44) return null;
+    if (header.toString('ascii', 0, 4) !== 'RIFF' || header.toString('ascii', 8, 12) !== 'WAVE') {
+      return null;
+    }
+
+    let offset = 12;
+    let byteRate = 0;
+    let dataBytes = Math.max(0, fallbackSizeBytes - 44);
+
+    while (offset + 8 <= bytesRead) {
+      const chunkId = header.toString('ascii', offset, offset + 4);
+      const chunkSize = header.readUInt32LE(offset + 4);
+      if (chunkId === 'fmt ' && offset + 20 <= bytesRead) {
+        byteRate = header.readUInt32LE(offset + 16);
+      } else if (chunkId === 'data') {
+        if (chunkSize > 0 && chunkSize <= fallbackSizeBytes) {
+          dataBytes = chunkSize;
+        }
+        break;
+      }
+      offset += 8 + chunkSize + (chunkSize % 2);
+    }
+
+    if (byteRate <= 0) {
+      byteRate = 44100 * 2 * 2;
+    }
+    if (dataBytes <= 0) return 0;
+    return Math.max(1, Math.round(dataBytes / byteRate));
+  } catch (_err) {
+    return null;
+  } finally {
+    if (fd !== null) {
+      try {
+        fs.closeSync(fd);
+      } catch (_closeErr) {}
+    }
+  }
+}
+
 function isValidFilename(filename) {
   if (!filename || typeof filename !== 'string' || filename === '.' || filename === '..') return false;
   if (filename.length > 240 || /[<>:"|?*\u0000-\u001f]/.test(filename)) return false;
@@ -238,12 +292,7 @@ app.delete('/api/recordings/:filename', (req, res) => {
   try {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
-      
-      const meta = loadAllMetadata();
-      if (meta[filename]) {
-        delete meta[filename];
-        saveAllMetadata(meta);
-      }
+      deleteRecordingMetadata(filename);
 
       broadcast({
         type: 'recordings_list',
@@ -314,8 +363,10 @@ app.get('/api/recordings/:filename/export', (req, res) => {
     return res.status(404).json({ error: 'File not found' });
   }
 
-  const format = (req.query.format || 'mp3').toLowerCase();
-  const bitrate = req.query.bitrate || '320k';
+  const format = String(req.query.format || 'mp3').toLowerCase();
+  const allowedBitrates = new Set(['320k', '256k', '192k', '128k']);
+  const requestedBitrate = String(req.query.bitrate || '320k').toLowerCase();
+  const bitrate = allowedBitrates.has(requestedBitrate) ? requestedBitrate : '320k';
   const baseName = filename.replace(/\.[^/.]+$/, '');
   const meta = getRecordingMetadata(filename);
 
@@ -327,8 +378,12 @@ app.get('/api/recordings/:filename/export', (req, res) => {
     wav: { codec: 'pcm_s16le', ext: 'wav', mime: 'audio/wav' }
   };
 
-  const target = formatConfig[format] || formatConfig.mp3;
-  const outFilename = `${baseName}.${target.ext}`;
+  if (!Object.hasOwn(formatConfig, format)) {
+    return res.status(400).json({ error: 'Unsupported export format' });
+  }
+
+  const target = formatConfig[format];
+  const outFilename = `${baseName.replace(/["\\]/g, '')}.${target.ext}`;
 
   res.setHeader('Content-Disposition', `attachment; filename="${outFilename}"`);
   res.setHeader('Content-Type', target.mime);
@@ -338,6 +393,9 @@ app.get('/api/recordings/:filename/export', (req, res) => {
   if (meta.title) ffmpegArgs.push('-metadata', `title=${meta.title}`);
   if (meta.artist) ffmpegArgs.push('-metadata', `artist=${meta.artist}`);
   if (meta.notes) ffmpegArgs.push('-metadata', `comment=${meta.notes}`);
+  if (Array.isArray(meta.tags) && meta.tags.length > 0) {
+    ffmpegArgs.push('-metadata', `genre=${meta.tags.join(', ')}`);
+  }
 
   if (target.codec === 'libmp3lame') {
     ffmpegArgs.push('-c:a', 'libmp3lame', '-b:a', bitrate, '-f', 'mp3', '-');
@@ -436,40 +494,40 @@ function listDevicesLinux() {
 }
 
 function parseWindowsAudioInputDevices(output) {
-    const devices = [];
-    const lines = String(output || '').split('\n');
-    let inAudio = false;
-    for (const line of lines) {
-      if (line.includes('DirectShow audio devices')) {
-        inAudio = true;
-        continue;
-      }
-      if (line.includes('DirectShow video devices')) {
-        inAudio = false;
-        continue;
-      }
-      
-      if (inAudio) {
-        const match = line.match(/\]\s+"([^"]+)"/);
-        if (match) {
-          const name = match[1];
-          if (!line.includes('Alternative name') &&
-              isDedicatedInputDevice(name) &&
-              !devices.some(d => d.name === name)) {
-            devices.push({
-              id: name,
-              name: name,
-              description: name,
-              nick: name,
-              type: 'input',
-              captureMode: 'owned_input',
-              isDefault: devices.length === 0
-            });
-          }
+  const devices = [];
+  const lines = String(output || '').split('\n');
+  let inAudio = false;
+  for (const line of lines) {
+    if (line.includes('DirectShow audio devices')) {
+      inAudio = true;
+      continue;
+    }
+    if (line.includes('DirectShow video devices')) {
+      inAudio = false;
+      continue;
+    }
+
+    if (inAudio) {
+      const match = line.match(/\]\s+"([^"]+)"/);
+      if (match) {
+        const name = match[1];
+        if (!line.includes('Alternative name') &&
+            isDedicatedInputDevice(name) &&
+            !devices.some(d => d.name === name)) {
+          devices.push({
+            id: name,
+            name: name,
+            description: name,
+            nick: name,
+            type: 'input',
+            captureMode: 'owned_input',
+            isDefault: devices.length === 0
+          });
         }
       }
     }
-    return devices;
+  }
+  return devices;
 }
 
 function listDevicesWindows() {
@@ -506,9 +564,14 @@ function getRecordingsList() {
         const filePath = path.join(RECORDINGS_DIR, file);
         const stats = fs.statSync(filePath);
         const meta = metaMap[file] || {};
+        const durationSeconds = typeof meta.durationSeconds === 'number'
+          ? meta.durationSeconds
+          : (file.toLowerCase().endsWith('.wav') ? readWavDurationSeconds(filePath, stats.size) : null);
+
         return {
           filename: file,
           sizeBytes: stats.size,
+          durationSeconds,
           createdAt: stats.birthtimeMs || stats.mtimeMs,
           path: `/recordings/${file}`,
           title: meta.title || file.replace(/\.[^/.]+$/, '').replace(/_/g, ' '),
@@ -573,46 +636,46 @@ function startMonitoring(device) {
   const monitorProcess = spawn(processSpec.command, processSpec.args);
   activeMonitorDevice = inputDevice;
   activeMonitorProcess = monitorProcess;
-  
+
   let buffer = Buffer.alloc(0);
-  
+
   monitorProcess.stdout.on('data', (chunk) => {
     buffer = Buffer.concat([buffer, chunk]);
     const frameSize = 4; // 16-bit stereo
     const chunkSize = 512 * frameSize; // 512 samples
-    
+
     while (buffer.length >= chunkSize) {
       const slice = buffer.slice(0, chunkSize);
       buffer = buffer.slice(chunkSize);
-      
+
       let maxL = 0;
       let maxR = 0;
       let sumSqL = 0;
       let sumSqR = 0;
       const sampleCount = slice.length / frameSize;
-      
+
       for (let i = 0; i < slice.length; i += frameSize) {
         const valL = slice.readInt16LE(i);
         const valR = slice.readInt16LE(i + 2);
-        
+
         const normL = valL / 32768.0;
         const normR = valR / 32768.0;
-        
+
         sumSqL += normL * normL;
         sumSqR += normR * normR;
-        
+
         if (Math.abs(normL) > maxL) maxL = Math.abs(normL);
         if (Math.abs(normR) > maxR) maxR = Math.abs(normR);
       }
-      
+
       const rmsL = Math.sqrt(sumSqL / sampleCount);
       const rmsR = Math.sqrt(sumSqR / sampleCount);
       const spectrum = computeSpectrum(slice, frameSize);
-      
+
       latestLevels = { rmsL, rmsR, peakL: maxL, peakR: maxR, spectrum };
-      
+
       const maxRms = Math.max(rmsL, rmsR);
-      
+
       if (autoSplitEnabled) {
         if (activeRecordingProcess) {
           if (maxRms < silenceThresholdLinear) {
@@ -636,7 +699,7 @@ function startMonitoring(device) {
           }
         }
       }
-      
+
       broadcast({
         type: 'levels',
         data: {
@@ -649,7 +712,7 @@ function startMonitoring(device) {
       });
     }
   });
-  
+
   monitorProcess.on('close', () => {
     if (activeMonitorProcess === monitorProcess) {
       activeMonitorProcess = null;
@@ -657,7 +720,7 @@ function startMonitoring(device) {
       broadcastStatus();
     }
   });
-  
+
   monitorProcess.on('error', (error) => {
     console.error('Audio input monitor failed:', error.message);
     broadcast({ type: 'error', data: { message: 'Unable to monitor the selected audio input' } });
@@ -676,6 +739,7 @@ async function finishRecordingContext(context, code, signal) {
     if (code !== 0 && !expectedSignal) {
       throw new Error(`Capture process exited before finalization (code ${code}, signal ${signal || 'none'})`);
     }
+    const elapsedSeconds = Math.max(1, Math.round((Date.now() - context.startedAt) / 1000));
     result = await finalizeOwnedRecording({
       tempPath: context.tempPath,
       recordingsDir: RECORDINGS_DIR,
@@ -683,7 +747,12 @@ async function finishRecordingContext(context, code, signal) {
       id: context.id,
       device: context.device,
       capturedAt: new Date(context.startedAt).toISOString(),
-      persistMetadata: updateRecordingMetadata
+      persistMetadata(filename, metadata) {
+        return updateRecordingMetadata(filename, {
+          ...metadata,
+          durationSeconds: elapsedSeconds
+        });
+      }
     });
     if (result.stagingCleanupPending) {
       console.warn(`Finalized recording saved, but its staging path was preserved for recovery at ${context.tempPath}`);
@@ -693,6 +762,7 @@ async function finishRecordingContext(context, code, signal) {
       data: {
         filename: result.filename,
         sizeBytes: result.sizeBytes,
+        durationSeconds: elapsedSeconds,
         sourceKind: 'owned_input'
       }
     });
@@ -853,12 +923,12 @@ wss.on('connection', (ws) => {
     type: 'devices',
     data: listDevices()
   }));
-  
+
   ws.send(JSON.stringify({
     type: 'recordings_list',
     data: getRecordingsList()
   }));
-  
+
   ws.send(JSON.stringify({
     type: 'status',
     data: {
@@ -876,11 +946,11 @@ wss.on('connection', (ws) => {
       silenceDurationMs
     }
   }));
-  
+
   ws.on('message', async (messageText) => {
     try {
       const msg = JSON.parse(messageText);
-      
+
       switch (msg.command) {
         case 'get_devices':
           ws.send(JSON.stringify({
@@ -888,17 +958,19 @@ wss.on('connection', (ws) => {
             data: listDevices()
           }));
           break;
-          
+
         case 'start_monitoring':
           if (msg.params && msg.params.device) {
             startMonitoring(msg.params.device);
+            broadcastStatus();
           }
           break;
-          
+
         case 'stop_monitoring':
           stopMonitoring();
+          broadcastStatus();
           break;
-          
+
         case 'start_recording':
           if (msg.params && msg.params.device) {
             targetRecordingDevice = assertDedicatedInputDevice(msg.params.device);
@@ -907,7 +979,7 @@ wss.on('connection', (ws) => {
               title: msg.params.title
             });
             autoSplitEnabled = !!msg.params.autoSplitEnabled;
-            
+
             if (autoSplitEnabled) {
               const requestedThreshold = Number(msg.params.silenceThresholdDb);
               const requestedDuration = Number(msg.params.silenceDurationMs);
@@ -918,11 +990,11 @@ wss.on('connection', (ws) => {
                 ? Math.min(5000, Math.max(500, requestedDuration))
                 : 1000;
               silenceThresholdLinear = Math.pow(10, silenceThresholdDb / 20);
-              
+
               if (activeMonitorDevice !== targetRecordingDevice) {
                 startMonitoring(targetRecordingDevice);
               }
-              
+
               const maxRms = Math.max(latestLevels.rmsL, latestLevels.rmsR);
               if (maxRms < silenceThresholdLinear) {
                 isArmedForSound = true;
@@ -938,20 +1010,20 @@ wss.on('connection', (ws) => {
             }
           }
           break;
-          
+
         case 'stop_recording':
           isArmedForSound = false;
           autoSplitEnabled = false;
           await stopRecording();
           break;
-          
+
         case 'refresh_recordings':
           ws.send(JSON.stringify({
             type: 'recordings_list',
             data: getRecordingsList()
           }));
           break;
-          
+
         default:
           console.warn('Unknown WebSocket command:', msg.command);
       }
@@ -963,7 +1035,7 @@ wss.on('connection', (ws) => {
       }));
     }
   });
-  
+
   ws.on('close', () => {
     if (wss.clients.size === 0) {
       stopMonitoring();
@@ -1012,6 +1084,8 @@ module.exports = {
   server,
   wss,
   startServer,
+  stopMonitoring,
+  stopRecording,
   getAvailablePort,
   isAllowedBrowserOrigin,
   LOOPBACK_HOST,
@@ -1023,6 +1097,8 @@ module.exports = {
   getRecordingsList,
   getRecordingMetadata,
   updateRecordingMetadata,
+  deleteRecordingMetadata,
+  readWavDurationSeconds,
   computeSpectrum,
   isValidFilename,
   RECORDINGS_DIR,

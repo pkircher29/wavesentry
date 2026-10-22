@@ -6,6 +6,7 @@ const path = require('node:path');
 const publicDir = path.join(__dirname, '..', 'public');
 const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(publicDir, 'app.js'), 'utf8');
+const css = fs.readFileSync(path.join(publicDir, 'style.css'), 'utf8');
 
 describe('owned-source Break-Wave UI', () => {
   it('collects artist and title instead of a system-capture prefix', () => {
@@ -28,5 +29,18 @@ describe('owned-source Break-Wave UI', () => {
     assert.doesNotMatch(html, /WASAPI Loopback/i);
     assert.doesNotMatch(html, /Spotify/i);
     assert.doesNotMatch(app, /virtual-audio-capturer/i);
+  });
+
+  it('wires device rescan, favorites, vault filters, and non-blocking notifications', () => {
+    assert.match(html, /id="refresh-devices-btn"/);
+    assert.match(app, /command:\s*'get_devices'/);
+    assert.match(html, /id="filter-favorites"/);
+    assert.match(html, /id="filter-eligible"/);
+    assert.match(html, /id="meta-favorite"/);
+    assert.match(html, /id="toast-container"/);
+    assert.match(html, /id="delete-modal"/);
+    assert.doesNotMatch(app, /window\.alert/);
+    assert.doesNotMatch(css, /transition:\s*all\b/);
+    assert.match(css, /font-variant-numeric:\s*tabular-nums/);
   });
 });

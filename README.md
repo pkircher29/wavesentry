@@ -13,32 +13,27 @@ WaveSentry is not a streaming-service recorder. It does not enumerate output sin
 *   **Dedicated-input capture**:
     *   **Linux (PipeWire)**: enumerates `Audio/Source` nodes and records them with `pw-record`.
     *   **Windows (DirectShow)**: enumerates physical/audio-interface inputs and records them with FFmpeg.
+    *   **Live Input Rescan**: rescan connected audio interfaces on the fly without restarting the server.
 *   **Crash-safe recording finalization**:
     *   Records into a private staging directory, waits for the recorder child process to close, validates the held nonempty WAV, then publishes it with an atomic no-clobber hard link. A staging entry is removed only while it still identifies the file WaveSentry opened; otherwise it is left for recovery.
-    *   Uses collision-safe `Artist - Title [short-id].wav` filenames and persists provenance in `.metadata.json`.
+    *   Uses collision-safe `Artist - Title [short-id].wav` filenames and persists provenance and duration in `.metadata.json`.
 *   **Auto-KJ Break-Wave handoff**:
     *   Copies eligible owned-input WAVs into `BREAK_WAVE_PUBLISH_DIR` and writes an adjacent JSON sidecar.
     *   The source recording is preserved. A request can never choose the destination directory.
-*   **Dual-Mode Real-Time Visualizer**:
-    *   **Oscilloscope Waveform**: Glowing cyber amplitude waveform history.
-    *   **16-Band Spectral FFT Analyzer**: Real-time frequency equalizer bars with peak hold decay and clipping indicators.
+*   **Dual-Mode Real-Time Signal Analyzer**:
+    *   **Oscilloscope Waveform**: Precision studio graticule with real-time stereo amplitude history.
+    *   **16-Band Spectral FFT Analyzer**: Real-time frequency band bars (`32 Hz` – `16 kHz`) with peak hold decay.
 *   **Studio Precision VU Metering**:
-    *   Stereo Left & Right level meters with peak hold indicators, continuous numerical `-dBFS` readouts, and active `CLIP` overload warnings.
+    *   Stereo Left & Right level meters with calibrated dB scale markings, peak hold indicators, continuous numerical `-dBFS` readouts (`tabular-nums`), and click-to-reset `CLIP` overload indicators.
 *   **Multi-Format Transcoder Engine**:
-    *   Instant on-the-fly export to **MP3** (up to 320kbps), **FLAC** (lossless), **AAC / M4A**, **OGG Vorbis**, and original **WAV**.
-*   **Track Metadata Studio**:
-    *   In-app metadata editor for track title, artist, custom tags, and session notes stored in `.metadata.json` and embedded when using the separate export/transcode endpoint.
+    *   Instant on-the-fly export to **MP3** (up to 320kbps), **FLAC** (lossless), **AAC / M4A**, **OGG Vorbis**, and **WAV** (16-bit PCM), automatically locking bitrate selection when a lossless format is chosen.
+*   **Track Metadata Studio & Vault Filtering**:
+    *   In-app metadata editor for track title, artist, custom tags, session notes, and favorite status (`★`) stored in `.metadata.json` and embedded when using the export/transcode endpoint.
+    *   One-click vault filter chips (**All Tracks**, **Favorites ★**, **Break-Wave Eligible**) plus instant keyword/tag search.
 *   **Smart Auto-Split on Silence**:
-    *   Continuous hands-free recording with automatic segment splitting based on customizable dB threshold (-60dB to -25dB) and silence duration (0.5s to 5.0s).
+    *   Continuous hands-free recording with automatic segment splitting based on customizable dB threshold (`-60 dB` to `-25 dB`) and silence duration (`0.5 s` to `5.0 s`), using non-blocking studio toast notifications so automated sessions are never interrupted by modal browser alerts.
 *   **Integrated Vault Audio Player**:
-    *   Built-in playback scrubber, speed adjustments (`0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `2.0x`), +/- 5s skip buttons, volume slider, and instant search filter.
-*   **Keyboard Shortcuts**:
-    *   `Space` / `Ctrl+R`: Start/Stop Recording
-    *   `M`: Toggle Live VU Monitoring
-    *   `V`: Toggle Visualizer Mode (Waveform / Spectrum FFT)
-    *   `P`: Play/Pause Selected Track
-    *   `Esc`: Close Modals
-    *   `?`: Open Shortcuts Cheat Sheet
+    *   Built-in playback scrubber, speed adjustments (`0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `2.0x`), `-5s` / `+5s` transport skip controls, volume slider, and direct export trigger.
 
 ---
 
@@ -50,7 +45,9 @@ WaveSentry is not a streaming-service recorder. It does not enumerate output sin
 | <kbd>M</kbd> | Toggle Audio Monitoring |
 | <kbd>V</kbd> | Switch Visualizer Mode (Waveform &harr; FFT Spectrum) |
 | <kbd>P</kbd> | Play / Pause Selected Vault Track |
-| <kbd>Esc</kbd> | Dismiss Active Modal |
+| <kbd>F</kbd> | Toggle Favorite on Selected Vault Track |
+| <kbd>/</kbd> | Focus Vault Search Input |
+| <kbd>Esc</kbd> | Dismiss Active Modal or Blur Input |
 | <kbd>?</kbd> | Open Shortcuts Reference |
 
 ---
@@ -112,13 +109,13 @@ npm test
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
 | `/api/devices` | GET | List eligible dedicated audio inputs |
-| `/api/recordings` | GET | List recorded files enriched with metadata |
+| `/api/recordings` | GET | List recorded files enriched with metadata and duration |
 | `/api/integration` | GET | Report whether configured Break-Wave publishing is available |
 | `/api/recordings/:filename` | DELETE | Delete recording and metadata |
-| `/api/recordings/:filename/metadata` | GET / POST | Get or update track title, artist, tags, and notes |
+| `/api/recordings/:filename/metadata` | GET / POST | Get or update track title, artist, tags, notes, and favorite state |
 | `/api/recordings/:filename/publish` | POST | Copy an eligible owned-input WAV to the configured Break-Wave directory |
 | `/api/recordings/:filename/export` | GET | Transcode and stream audio (`?format=mp3&bitrate=320k`) |
-| `/` | WS | Real-time level telemetry, spectrum FFT, status, and recording progress |
+| `/` | WS | Real-time level telemetry, spectrum FFT, status, device rescan, and recording progress |
 
 ---
 

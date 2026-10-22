@@ -1,6 +1,6 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
-const { startServer } = require('./server.js');
+const { startServer, stopMonitoring, server } = require('./server.js');
 
 let mainWindow;
 
@@ -13,9 +13,13 @@ async function createWindow() {
   }
 
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 850,
-    title: "WaveSentry",
+    width: 1280,
+    height: 860,
+    minWidth: 960,
+    minHeight: 680,
+    backgroundColor: '#090b0f',
+    autoHideMenuBar: true,
+    title: 'WaveSentry Pro',
     icon: path.join(__dirname, '..', 'public', 'favicon.ico'),
     webPreferences: {
       nodeIntegration: false,
@@ -31,6 +35,13 @@ async function createWindow() {
 }
 
 app.on('ready', createWindow);
+
+app.on('before-quit', () => {
+  try {
+    stopMonitoring();
+    server.close();
+  } catch (_err) {}
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

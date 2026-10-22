@@ -7,6 +7,8 @@ const {
   isValidFilename,
   getRecordingMetadata,
   updateRecordingMetadata,
+  deleteRecordingMetadata,
+  readWavDurationSeconds,
   computeSpectrum,
   listDevices,
   parsePipeWireInputDevices,
@@ -15,18 +17,37 @@ const {
   RECORDINGS_DIR
 } = require('../src/server.js');
 
+function makeTestWav(audioBytes = 176400 * 3) {
+  const payload = Buffer.alloc(44 + audioBytes);
+  payload.write('RIFF', 0, 'ascii');
+  payload.writeUInt32LE(payload.length - 8, 4);
+  payload.write('WAVE', 8, 'ascii');
+  payload.write('fmt ', 12, 'ascii');
+  payload.writeUInt32LE(16, 16);
+  payload.writeUInt16LE(1, 20);
+  payload.writeUInt16LE(2, 22);
+  payload.writeUInt32LE(44100, 24);
+  payload.writeUInt32LE(176400, 28);
+  payload.writeUInt16LE(4, 32);
+  payload.writeUInt16LE(16, 34);
+  payload.write('data', 36, 'ascii');
+  payload.writeUInt32LE(audioBytes, 40);
+  return payload;
+}
+
 describe('WaveSentry Pro Backend Suite', () => {
   const testFilename = 'test_sample_recording.wav';
   const testFilePath = path.join(RECORDINGS_DIR, testFilename);
 
   before(() => {
-    fs.writeFileSync(testFilePath, Buffer.alloc(1024, 0));
+    fs.writeFileSync(testFilePath, makeTestWav(176400 * 3));
   });
 
   after(() => {
     if (fs.existsSync(testFilePath)) {
       fs.unlinkSync(testFilePath);
     }
+    deleteRecordingMetadata(testFilename);
   });
 
   describe('Security: isValidFilename', () => {
@@ -47,7 +68,7 @@ describe('WaveSentry Pro Backend Suite', () => {
     });
   });
 
-  describe('Metadata Management', () => {
+  describe('Metadata & WAV Duration Management', () => {
     it('should retrieve default metadata for new file', () => {
       const meta = getRecordingMetadata('brand_new_track.wav');
       assert.equal(meta.title, 'brand new track');
@@ -56,20 +77,29 @@ describe('WaveSentry Pro Backend Suite', () => {
       assert.deepEqual(meta.tags, []);
     });
 
-    it('should update and persist track metadata', () => {
+    it('should update and persist track metadata including favorites', () => {
       const updated = updateRecordingMetadata(testFilename, {
         title: 'Studio Session 101',
         artist: 'Antigravity Band',
         tags: ['live', 'rehearsal'],
-        notes: 'Recorded in 44.1kHz stereo'
+        notes: 'Recorded in 44.1kHz stereo',
+        favorite: true
       });
 
       assert.equal(updated.title, 'Studio Session 101');
       assert.equal(updated.artist, 'Antigravity Band');
       assert.deepEqual(updated.tags, ['live', 'rehearsal']);
+      assert.equal(updated.favorite, true);
 
       const retrieved = getRecordingMetadata(testFilename);
       assert.equal(retrieved.title, 'Studio Session 101');
+      assert.equal(retrieved.favorite, true);
+    });
+
+    it('should compute accurate WAV duration in seconds from RIFF header', () => {
+      const stats = fs.statSync(testFilePath);
+      const duration = readWavDurationSeconds(testFilePath, stats.size);
+      assert.equal(duration, 3);
     });
   });
 
@@ -91,12 +121,14 @@ describe('WaveSentry Pro Backend Suite', () => {
   });
 
   describe('Recordings & Device Enumeration', () => {
-    it('should list recordings with enriched metadata', () => {
+    it('should list recordings with enriched metadata and durationSeconds', () => {
       const list = getRecordingsList();
       assert.ok(Array.isArray(list));
       const found = list.find(r => r.filename === testFilename);
       assert.ok(found, 'Test recording should be listed');
       assert.equal(found.title, 'Studio Session 101');
+      assert.equal(found.durationSeconds, 3);
+      assert.equal(found.favorite, true);
     });
 
     it('should list available audio devices gracefully', () => {
