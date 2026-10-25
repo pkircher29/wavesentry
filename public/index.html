@@ -466,6 +466,17 @@
   <!-- Audio Element for Library Player -->
   <audio id="library-audio" preload="auto"></audio>
 
+  <div id="debug-panel" class="debug-panel" hidden role="dialog" aria-label="Debug log">
+    <div class="debug-head">
+      <strong>Debug log</strong>
+      <span class="debug-hint">Ctrl+Shift+~ to close</span>
+      <button type="button" id="debug-copy">Copy</button>
+      <button type="button" id="debug-clear">Clear</button>
+      <button type="button" id="debug-close" aria-label="Close debug log">&times;</button>
+    </div>
+    <pre id="debug-lines" class="debug-lines"></pre>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

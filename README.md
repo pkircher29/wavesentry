@@ -49,6 +49,7 @@ System audio (what your speakers play) can also be recorded: pick a "System audi
 | <kbd>/</kbd> | Focus Vault Search Input |
 | <kbd>Esc</kbd> | Dismiss Active Modal or Blur Input |
 | <kbd>?</kbd> | Open Shortcuts Reference |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>~</kbd> | Toggle Debug Log (server + auto-split diagnostics) |
 
 ---
 

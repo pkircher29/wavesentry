@@ -428,6 +428,22 @@ app.get('/api/recordings/:filename/export', (req, res) => {
 });
 
 // State management
+// Debug log: ring buffer mirrored to the UI (Ctrl+Shift+~). Mirrors console.* too.
+const DEBUG_LOG_MAX = 500;
+const debugLines = [];
+let lastSplitLog = 0;
+function dlog(level, ...args) {
+  const msg = args.map(a => (a instanceof Error ? (a.stack || a.message) : (typeof a === 'string' ? a : JSON.stringify(a)))).join(' ');
+  const line = { t: new Date().toISOString(), level, msg };
+  debugLines.push(line);
+  if (debugLines.length > DEBUG_LOG_MAX) debugLines.shift();
+  try { broadcast({ type: 'debug_log', data: line }); } catch (_e) { /* wss not ready yet */ }
+}
+for (const [fn, level] of [['log', 'info'], ['warn', 'warn'], ['error', 'error']]) {
+  const orig = console[fn].bind(console);
+  console[fn] = (...args) => { orig(...args); dlog(level, ...args); };
+}
+
 let activeMonitorProcess = null;
 let activeMonitorDevice = null;
 let activeRecordingProcess = null;
@@ -622,6 +638,7 @@ function startMonitoring(device) {
     outputPath: '-',
     sampleRate: 16000
   });
+  dlog('info', 'monitor spawn:', processSpec.command, processSpec.args.join(' '));
   const monitorProcess = spawn(processSpec.command, processSpec.args);
   activeMonitorDevice = inputDevice;
   activeMonitorProcess = monitorProcess;
@@ -664,6 +681,11 @@ function startMonitoring(device) {
       latestLevels = { rmsL, rmsR, peakL: maxL, peakR: maxR, spectrum };
 
       const maxRms = Math.max(rmsL, rmsR);
+
+      if (autoSplitEnabled && Date.now() - lastSplitLog >= 1000) {
+        lastSplitLog = Date.now();
+        dlog('debug', `autosplit level=${(20 * Math.log10(maxRms || 1e-9)).toFixed(1)}dB threshold=${silenceThresholdDb}dB recording=${!!activeRecordingProcess} armed=${isArmedForSound} silentMs=${silenceStartTimestamp ? Date.now() - silenceStartTimestamp : 0}`);
+      }
 
       if (autoSplitEnabled) {
         if (activeRecordingProcess) {
@@ -800,6 +822,7 @@ async function startRecording(device, metadata = {}) {
     outputPath: tempPath,
     sampleRate: 44100
   });
+  dlog('info', 'record spawn:', processSpec.command, processSpec.args.join(' '));
   const captureProcess = spawn(processSpec.command, processSpec.args);
   const context = {
     process: captureProcess,
@@ -908,6 +931,7 @@ function broadcastStatus() {
 
 // WebSocket Server Events
 wss.on('connection', (ws) => {
+  ws.send(JSON.stringify({ type: 'debug_history', data: debugLines }));
   ws.send(JSON.stringify({
     type: 'devices',
     data: listDevices()

@@ -32,6 +32,7 @@ let clipTimerL = null;
 let clipTimerR = null;
 
 // Library state
+let lastRecordingState = 'idle';
 let allRecordings = [];
 let activeFilter = 'all'; // 'all', 'favorites', 'eligible'
 let activeTrack = null;
@@ -382,6 +383,12 @@ function connectWebSocket() {
         case 'devices':
           populateDevices(msg.data);
           break;
+        case 'debug_history':
+          debugReset(msg.data);
+          break;
+        case 'debug_log':
+          debugAppend(msg.data);
+          break;
         case 'recordings_list':
           allRecordings = msg.data || [];
           syncActiveTrackMetadata();
@@ -475,6 +482,14 @@ function updateStatus(status) {
   if (activeDevice && deviceSelect && Array.from(deviceSelect.options).some(o => o.value === activeDevice)) {
     deviceSelect.value = activeDevice;
   }
+
+  // New segment (auto-split) or new take: clear the clock/size instead of showing the previous song's totals
+  if (status.recording && status.recordingState !== lastRecordingState &&
+      (status.recordingState === 'armed' || status.recordingState === 'recording')) {
+    timerDisplay.textContent = '00:00:00';
+    document.getElementById('record-size').textContent = '0.00 MB';
+  }
+  lastRecordingState = status.recording ? status.recordingState : 'idle';
 
   if (status.recording) {
     if (status.recordingState === 'armed') {
@@ -1140,3 +1155,55 @@ window.addEventListener('keydown', (e) => {
 });
 
 connectWebSocket();
+
+// ---- Debug log overlay (Ctrl+Shift+~) ----
+const debugPanel = document.getElementById('debug-panel');
+const debugLinesEl = document.getElementById('debug-lines');
+const debugBuffer = [];
+function debugFormat(l) { return `${l.t.slice(11, 23)} [${l.level}] ${l.msg}`; }
+function debugAppend(l) {
+  debugBuffer.push(l);
+  if (debugBuffer.length > 500) debugBuffer.shift();
+  if (debugPanel.hidden) return;
+  const stick = debugLinesEl.scrollTop + debugLinesEl.clientHeight >= debugLinesEl.scrollHeight - 20;
+  const span = document.createElement('span');
+  span.className = `l-${l.level}`;
+  span.textContent = debugFormat(l) + '\n';
+  debugLinesEl.appendChild(span);
+  while (debugLinesEl.childNodes.length > 500) debugLinesEl.removeChild(debugLinesEl.firstChild);
+  if (stick) debugLinesEl.scrollTop = debugLinesEl.scrollHeight;
+}
+function debugRender() {
+  debugLinesEl.textContent = '';
+  const frag = document.createDocumentFragment();
+  debugBuffer.forEach(l => {
+    const span = document.createElement('span');
+    span.className = `l-${l.level}`;
+    span.textContent = debugFormat(l) + '\n';
+    frag.appendChild(span);
+  });
+  debugLinesEl.appendChild(frag);
+  debugLinesEl.scrollTop = debugLinesEl.scrollHeight;
+}
+function debugReset(lines) {
+  debugBuffer.length = 0;
+  (lines || []).forEach(l => debugBuffer.push(l));
+  if (!debugPanel.hidden) debugRender();
+}
+function debugToggle() {
+  debugPanel.hidden = !debugPanel.hidden;
+  if (!debugPanel.hidden) debugRender();
+}
+window.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.shiftKey && (e.code === 'Backquote' || e.key === '~' || e.key === '`')) {
+    e.preventDefault();
+    e.stopPropagation();
+    debugToggle();
+  }
+}, true);
+document.getElementById('debug-close').addEventListener('click', debugToggle);
+document.getElementById('debug-clear').addEventListener('click', () => { debugBuffer.length = 0; debugRender(); });
+document.getElementById('debug-copy').addEventListener('click', () => {
+  navigator.clipboard.writeText(debugBuffer.map(debugFormat).join('\n')).then(
+    () => showMessage('Debug log copied'), () => showMessage('Copy failed', true));
+});
