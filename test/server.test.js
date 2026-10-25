@@ -161,5 +161,16 @@ describe('WaveSentry Pro Backend Suite', () => {
       const devices = parseWindowsAudioInputDevices(output);
       assert.deepEqual(devices.map(device => device.id), ['Microphone (USB Mixer)']);
     });
+    it('parses FFmpeg 7+ per-line (audio) output without section headers', () => {
+      const output = [
+        '[in#0 @ 0x1] "Integrated Camera" (video)',
+        '[in#0 @ 0x1]   Alternative name "@device_pnp_x"',
+        '[in#0 @ 0x1] "Analogue 1 + 2 (Focusrite USB Audio)" (audio)',
+        '[in#0 @ 0x1]   Alternative name "@device_cm_{33D9}\wave_{F024}"',
+        '[in#0 @ 0x1] "Stereo Mix (Realtek)" (audio)'
+      ].join('\n');
+      const devices = parseWindowsAudioInputDevices(output);
+      assert.deepEqual(devices.map(device => device.id), ['Analogue 1 + 2 (Focusrite USB Audio)']);
+    });
   });
 });

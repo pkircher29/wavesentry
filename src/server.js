@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const net = require('net');
 const crypto = require('node:crypto');
-const { spawn, execSync } = require('child_process');
+const { spawn, spawnSync, execSync } = require('child_process');
 const os = require('os');
 const isWindows = os.platform() === 'win32';
 const {
@@ -495,36 +495,20 @@ function listDevicesLinux() {
 
 function parseWindowsAudioInputDevices(output) {
   const devices = [];
-  const lines = String(output || '').split('\n');
-  let inAudio = false;
-  for (const line of lines) {
-    if (line.includes('DirectShow audio devices')) {
-      inAudio = true;
-      continue;
-    }
-    if (line.includes('DirectShow video devices')) {
-      inAudio = false;
-      continue;
-    }
-
-    if (inAudio) {
-      const match = line.match(/\]\s+"([^"]+)"/);
-      if (match) {
-        const name = match[1];
-        if (!line.includes('Alternative name') &&
-            isDedicatedInputDevice(name) &&
-            !devices.some(d => d.name === name)) {
-          devices.push({
-            id: name,
-            name: name,
-            description: name,
-            nick: name,
-            type: 'input',
-            captureMode: 'owned_input',
-            isDefault: devices.length === 0
-          });
-        }
-      }
+  let inAudio = false; // old FFmpeg (<7): section headers
+  for (const line of String(output || '').split(/\r?\n/)) {
+    if (line.includes('DirectShow audio devices')) { inAudio = true; continue; }
+    if (line.includes('DirectShow video devices')) { inAudio = false; continue; }
+    const match = line.match(/\]\s+"([^"]+)"(?:\s+\((audio|video|none)[^)]*\))?/);
+    if (!match || line.includes('Alternative name')) continue;
+    const name = match[1];
+    // new FFmpeg (7+/8): per-line "(audio)" tag, no headers
+    const isAudio = match[2] ? match[2] === 'audio' : inAudio;
+    if (isAudio && isDedicatedInputDevice(name) && !devices.some(d => d.name === name)) {
+      devices.push({
+        id: name, name, description: name, nick: name,
+        type: 'input', captureMode: 'owned_input', isDefault: devices.length === 0
+      });
     }
   }
   return devices;
@@ -532,12 +516,10 @@ function parseWindowsAudioInputDevices(output) {
 
 function listDevicesWindows() {
   try {
-    let output = '';
-    try {
-      execSync('ffmpeg -hide_banner -f dshow -list_devices true -i dummy', { stdio: 'pipe' });
-    } catch (err) {
-      output = err.stderr ? err.stderr.toString() : (err.message || '');
-    }
+    // FFmpeg 7+ exits 0 on this probe and prints to stderr, so don't rely on a throw
+    const r = spawnSync('ffmpeg', ['-hide_banner', '-f', 'dshow', '-list_devices', 'true', '-i', 'dummy'], { encoding: 'utf8' });
+    if (r.error) throw r.error;
+    const output = (r.stderr || '') + (r.stdout || '');
     return parseWindowsAudioInputDevices(output);
   } catch (err) {
     console.error('Error listing Windows input devices:', err.message);
