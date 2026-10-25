@@ -723,9 +723,9 @@ async function finishRecordingContext(context, code, signal) {
 
   let result = null;
   try {
-    const expectedSignal = context.stopRequested && (signal === 'SIGINT' || signal === 'SIGTERM');
+    // pw-record exits 1 after a requested SIGINT stop; the WAV validation below is the real check
     if (context.spawnError) throw context.spawnError;
-    if (code !== 0 && !expectedSignal) {
+    if (code !== 0 && !context.stopRequested) {
       throw new Error(`Capture process exited before finalization (code ${code}, signal ${signal || 'none'})`);
     }
     const elapsedSeconds = Math.max(1, Math.round((Date.now() - context.startedAt) / 1000));
