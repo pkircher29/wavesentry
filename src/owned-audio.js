@@ -8,6 +8,7 @@ const MAX_SHORT_ID_LENGTH = 11;
 
 const LOOPBACK_DEVICE_PATTERNS = [
   /virtual-audio-capturer/i,
+  /^(?:alsa|bluez|pipewire)_output\./i, // PipeWire sinks (recorded via stream.capture.sink)
   /(?:^|[._\s-])loopback(?:$|[._\s-])/i,
   /(?:^|[._\s-])monitor(?:$|[._\s-])/i,
   /monitor of /i,
@@ -30,8 +31,18 @@ function assertDedicatedInputDevice(device) {
   return device.trim();
 }
 
+// System/loopback capture is allowed but tagged 'system_loopback' (never Break-Wave publishable).
+function assertCaptureDevice(device) {
+  if (typeof device !== 'string' || !device.trim()) throw new Error('Select an audio device');
+  return device.trim();
+}
+
+function sourceKindForDevice(device) {
+  return isDedicatedInputDevice(device) ? 'owned_input' : 'system_loopback';
+}
+
 function buildCaptureProcessSpec({ platform, device, outputPath = '-', sampleRate = 16000 }) {
-  const inputDevice = assertDedicatedInputDevice(device);
+  const inputDevice = assertCaptureDevice(device);
   const rate = Number(sampleRate);
   if (!Number.isInteger(rate) || rate < 8000 || rate > 192000) {
     throw new Error('Invalid audio sample rate');
@@ -58,6 +69,7 @@ function buildCaptureProcessSpec({ platform, device, outputPath = '-', sampleRat
     return {
       command: 'pw-record',
       args: [
+        ...(isDedicatedInputDevice(inputDevice) ? [] : ['--properties', 'stream.capture.sink=true']),
         '--target', inputDevice,
         '--format', 's16',
         '--rate', String(rate),
@@ -371,7 +383,7 @@ async function finalizeOwnedRecording({
       tags: [],
       notes: '',
       favorite: false,
-      sourceKind: 'owned_input',
+      sourceKind: sourceKindForDevice(device),
       captureDevice: String(device || ''),
       capturedAt,
       embeddedTags: false
@@ -555,6 +567,8 @@ async function publishOwnedRecording({
 
 module.exports = {
   assertDedicatedInputDevice,
+  assertCaptureDevice,
+  sourceKindForDevice,
   assertSimpleWavFilename,
   buildCaptureProcessSpec,
   createTrackFilename,

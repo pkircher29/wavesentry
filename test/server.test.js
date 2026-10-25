@@ -136,22 +136,23 @@ describe('WaveSentry Pro Backend Suite', () => {
       assert.ok(Array.isArray(devices));
       devices.forEach(device => {
         assert.ok(device.name);
-        assert.equal(device.type, 'input');
-        assert.equal(device.captureMode, 'owned_input');
+        assert.ok(['input', 'output'].includes(device.type));
+        assert.ok(['owned_input', 'system_loopback'].includes(device.captureMode));
       });
     });
 
-    it('should include physical PipeWire sources and exclude sink monitors', () => {
+    it('should list PipeWire sources first, then sinks as system loopback', () => {
       const devices = parsePipeWireInputDevices([
         { info: { props: { 'media.class': 'Audio/Source', 'node.name': 'alsa_input.usb-mixer', 'node.description': 'USB Mixer' } } },
         { info: { props: { 'media.class': 'Audio/Source', 'node.name': 'alsa_output.pci.monitor', 'node.description': 'Monitor of Speakers' } } },
         { info: { props: { 'media.class': 'Audio/Sink', 'node.name': 'alsa_output.pci', 'node.description': 'Speakers' } } }
       ], 'alsa_input.usb-mixer');
-      assert.deepEqual(devices.map(device => device.id), ['alsa_input.usb-mixer']);
+      assert.deepEqual(devices.map(device => device.id), ['alsa_input.usb-mixer', 'alsa_output.pci.monitor', 'alsa_output.pci']);
       assert.equal(devices[0].isDefault, true);
+      assert.deepEqual(devices.map(device => device.captureMode), ['owned_input', 'system_loopback', 'system_loopback']);
     });
 
-    it('should include DirectShow inputs and exclude known system-loopback devices', () => {
+    it('should tag DirectShow loopback devices as system audio', () => {
       const output = [
         '[dshow] DirectShow audio devices',
         '[dshow]  "Microphone (USB Mixer)"',
@@ -159,7 +160,7 @@ describe('WaveSentry Pro Backend Suite', () => {
         '[dshow]  "virtual-audio-capturer"'
       ].join('\n');
       const devices = parseWindowsAudioInputDevices(output);
-      assert.deepEqual(devices.map(device => device.id), ['Microphone (USB Mixer)']);
+      assert.deepEqual(devices.map(device => `${device.id}|${device.captureMode}`), ['Microphone (USB Mixer)|owned_input', 'Stereo Mix (Realtek)|system_loopback', 'virtual-audio-capturer|system_loopback']);
     });
     it('parses FFmpeg 7+ per-line (audio) output without section headers', () => {
       const output = [
@@ -170,7 +171,7 @@ describe('WaveSentry Pro Backend Suite', () => {
         '[in#0 @ 0x1] "Stereo Mix (Realtek)" (audio)'
       ].join('\n');
       const devices = parseWindowsAudioInputDevices(output);
-      assert.deepEqual(devices.map(device => device.id), ['Analogue 1 + 2 (Focusrite USB Audio)']);
+      assert.deepEqual(devices.map(device => device.id), ['Analogue 1 + 2 (Focusrite USB Audio)', 'Stereo Mix (Realtek)']);
     });
   });
 });

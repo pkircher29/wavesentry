@@ -9,7 +9,8 @@ const { spawn, spawnSync, execSync } = require('child_process');
 const os = require('os');
 const isWindows = os.platform() === 'win32';
 const {
-  assertDedicatedInputDevice,
+  assertCaptureDevice,
+  sourceKindForDevice,
   buildCaptureProcessSpec,
   createTrackFilename,
   finalizeOwnedRecording,
@@ -462,21 +463,25 @@ function parsePipeWireInputDevices(dump, defaultSource = null) {
   const devices = [];
   for (const obj of Array.isArray(dump) ? dump : []) {
     const props = obj && obj.info && obj.info.props;
-    if (!props || props['media.class'] !== 'Audio/Source') continue;
+    const cls = props && props['media.class'];
+    if (cls !== 'Audio/Source' && cls !== 'Audio/Sink') continue;
     const name = props['node.name'];
-    const description = props['node.description'] || name;
-    if (!name || !isDedicatedInputDevice(`${name} ${description}`)) continue;
+    let description = props['node.description'] || name;
+    if (!name) continue;
+    const loopback = cls === 'Audio/Sink' || !isDedicatedInputDevice(`${name} ${description}`);
+    if (loopback) description = `System audio: ${description}`;
     devices.push({
       id: name,
       name,
       description,
       nick: props['node.nick'] || '',
-      type: 'input',
-      captureMode: 'owned_input',
+      type: loopback ? 'output' : 'input',
+      captureMode: loopback ? 'system_loopback' : 'owned_input',
       isDefault: name === defaultSource
     });
   }
   return devices.sort((a, b) => {
+    if ((a.type === 'output') !== (b.type === 'output')) return a.type === 'output' ? 1 : -1;
     if (a.isDefault && !b.isDefault) return -1;
     if (!a.isDefault && b.isDefault) return 1;
     return a.description.localeCompare(b.description);
@@ -504,10 +509,12 @@ function parseWindowsAudioInputDevices(output) {
     const name = match[1];
     // new FFmpeg (7+/8): per-line "(audio)" tag, no headers
     const isAudio = match[2] ? match[2] === 'audio' : inAudio;
-    if (isAudio && isDedicatedInputDevice(name) && !devices.some(d => d.name === name)) {
+    if (isAudio && !devices.some(d => d.name === name)) {
+      const own = isDedicatedInputDevice(name);
       devices.push({
-        id: name, name, description: name, nick: name,
-        type: 'input', captureMode: 'owned_input', isDefault: devices.length === 0
+        id: name, name, description: own ? name : `System audio: ${name}`, nick: name,
+        type: own ? 'input' : 'output', captureMode: own ? 'owned_input' : 'system_loopback',
+        isDefault: own && !devices.some(d => d.type === 'input')
       });
     }
   }
@@ -608,7 +615,7 @@ function computeSpectrum(slice, frameSize) {
 
 function startMonitoring(device) {
   stopMonitoring();
-  const inputDevice = assertDedicatedInputDevice(device);
+  const inputDevice = assertCaptureDevice(device);
   const processSpec = buildCaptureProcessSpec({
     platform: os.platform(),
     device: inputDevice,
@@ -745,7 +752,7 @@ async function finishRecordingContext(context, code, signal) {
         filename: result.filename,
         sizeBytes: result.sizeBytes,
         durationSeconds: elapsedSeconds,
-        sourceKind: 'owned_input'
+        sourceKind: sourceKindForDevice(context.device)
       }
     });
   } catch (error) {
@@ -775,7 +782,7 @@ async function finishRecordingContext(context, code, signal) {
 }
 
 async function startRecording(device, metadata = {}) {
-  const inputDevice = assertDedicatedInputDevice(device);
+  const inputDevice = assertCaptureDevice(device);
   if (activeRecordingContext) {
     await stopRecording();
   }
@@ -955,7 +962,7 @@ wss.on('connection', (ws) => {
 
         case 'start_recording':
           if (msg.params && msg.params.device) {
-            targetRecordingDevice = assertDedicatedInputDevice(msg.params.device);
+            targetRecordingDevice = assertCaptureDevice(msg.params.device);
             activeRecordingMetadata = normalizeTrackMetadata({
               artist: msg.params.artist,
               title: msg.params.title

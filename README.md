@@ -4,7 +4,7 @@
 
 WaveSentry records a dedicated microphone, line input, mixer, or USB audio interface on **Linux** (PipeWire) and **Windows** (DirectShow/FFmpeg). It can copy a finalized owned-input WAV into a server-configured Auto-KJ Break-Wave library without deleting the WaveSentry source.
 
-WaveSentry is not a streaming-service recorder. It does not enumerate output sinks, expose `virtual-audio-capturer`, use PipeWire sink monitors, or support Spotify/DRM capture or ripping. Import purchased audio files directly into Auto-KJ whenever possible.
+System audio (what your speakers play) can also be recorded: pick a "System audio:" entry in the device list (PipeWire sink monitors on Linux; Stereo Mix / virtual-audio-capturer on Windows). Those takes are tagged `system_loopback` and are never eligible for the Auto-KJ Break-Wave handoff. Only record audio you have the right to record.
 
 ---
 

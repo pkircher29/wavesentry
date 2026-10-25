@@ -12,6 +12,7 @@ const {
   createTrackFilename,
   finalizeOwnedRecording,
   isDedicatedInputDevice,
+  sourceKindForDevice,
   publishOwnedRecording,
   validateWavFile,
   waitForChildClose
@@ -89,11 +90,12 @@ describe('owned-source capture boundary', () => {
     assert.deepEqual(linuxSpec.args.slice(0, 2), ['--target', 'alsa_input.usb-Focusrite_Scarlett']);
     assert.ok(!linuxSpec.args.join(' ').includes('stream.capture.sink'));
 
-    assert.throws(() => buildCaptureProcessSpec({
-      platform: 'win32',
-      device: 'virtual-audio-capturer',
-      outputPath: 'take.wav'
-    }), /dedicated audio input/i);
+    // loopback is allowed: tagged system_loopback, Linux records the sink monitor
+    const loop = buildCaptureProcessSpec({ platform: 'linux', device: 'alsa_output.pci.analog-stereo', outputPath: 'x.wav' });
+    assert.deepEqual(loop.args.slice(0, 2), ['--properties', 'stream.capture.sink=true']);
+    assert.equal(sourceKindForDevice('alsa_output.pci.analog-stereo.monitor'), 'system_loopback');
+    assert.equal(sourceKindForDevice('alsa_input.usb-Focusrite_Scarlett'), 'owned_input');
+    assert.throws(() => buildCaptureProcessSpec({ platform: 'win32', device: '  ', outputPath: 'take.wav' }), /select an audio device/i);
   });
 
   it('creates sanitized metadata-aware Break-Wave filenames', () => {
