@@ -1,6 +1,6 @@
 {
   "name": "wavesentry",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "WaveSentry - dedicated owned-audio input recorder with safe Auto-KJ Break-Wave handoff",
   "author": {
     "name": "Paul",
