@@ -21,14 +21,13 @@ describe('owned-source Break-Wave UI', () => {
     assert.match(app, /\/publish/);
     assert.match(app, /publish-btn/);
     assert.match(html, /purchased files directly to Auto-KJ/i);
-    assert.match(html, /does not support capturing or ripping streaming services/i);
+    assert.match(html, /can.t be published to Break-Wave/i);
   });
 
-  it('does not advertise loopback or Spotify capture', () => {
+  it('labels system audio plainly and never names streaming services', () => {
     assert.doesNotMatch(html, /virtual-audio-capturer/i);
-    assert.doesNotMatch(html, /WASAPI Loopback/i);
     assert.doesNotMatch(html, /Spotify/i);
-    assert.doesNotMatch(app, /virtual-audio-capturer/i);
+    assert.match(app, /System audio \(what plays on this computer\)/);
   });
 
   it('wires device rescan, favorites, vault filters, and non-blocking notifications', () => {

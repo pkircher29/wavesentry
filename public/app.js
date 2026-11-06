@@ -112,7 +112,7 @@ function drawOscilloscopeView(w, h, levelL, levelR, advanceHistory) {
 
   // Center 0 dB axis line
   const centerY = Math.round(h / 2) + 0.5;
-  ctx.strokeStyle = 'rgba(34, 211, 238, 0.22)';
+  ctx.strokeStyle = 'rgba(70, 224, 176, 0.22)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, centerY);
@@ -121,9 +121,9 @@ function drawOscilloscopeView(w, h, levelL, levelR, advanceHistory) {
 
   const barWidth = w / maxHistory;
   const gradient = ctx.createLinearGradient(0, 0, 0, h);
-  gradient.addColorStop(0, '#38bdf8');
-  gradient.addColorStop(0.5, '#10b981');
-  gradient.addColorStop(1, '#38bdf8');
+  gradient.addColorStop(0, '#46e0b0');
+  gradient.addColorStop(0.5, '#2fb88f');
+  gradient.addColorStop(1, '#46e0b0');
   ctx.fillStyle = gradient;
 
   for (let i = 0; i < amplitudeHistory.length; i++) {
@@ -144,10 +144,10 @@ function drawSpectrumView(w, h, spectrum, advanceHistory) {
   const barWidth = (w - (numBands + 1) * gap) / numBands;
 
   const gradient = ctx.createLinearGradient(0, h - bottomReserved, 0, 6);
-  gradient.addColorStop(0, '#0ea5e9');
-  gradient.addColorStop(0.65, '#10b981');
-  gradient.addColorStop(0.9, '#f59e0b');
-  gradient.addColorStop(1, '#ef4444');
+  gradient.addColorStop(0, '#2fb88f');
+  gradient.addColorStop(0.65, '#46e0b0');
+  gradient.addColorStop(0.9, '#ffb340');
+  gradient.addColorStop(1, '#ff4b36');
 
   ctx.font = '9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
   ctx.textAlign = 'center';
@@ -173,7 +173,7 @@ function drawSpectrumView(w, h, spectrum, advanceHistory) {
     ctx.fillStyle = gradient;
     ctx.fillRect(x, y, barWidth, barHeight);
 
-    ctx.fillStyle = '#e2e8f0';
+    ctx.fillStyle = '#eceae4';
     ctx.fillRect(x, Math.max(4, peakY - 2), barWidth, 2);
 
     ctx.fillStyle = 'rgba(148, 163, 184, 0.65)';
@@ -427,24 +427,29 @@ function populateDevices(devices) {
   select.innerHTML = '';
 
   if (!devices || devices.length === 0) {
-    select.innerHTML = '<option value="" disabled selected>No dedicated audio inputs detected</option>';
+    select.innerHTML = '<option value="" disabled selected>No audio sources found: plug one in and Rescan</option>';
     return;
   }
 
   let matchedPrevious = false;
+  const groups = {
+    input: Object.assign(document.createElement('optgroup'), { label: 'Inputs (mic, line, interface)' }),
+    output: Object.assign(document.createElement('optgroup'), { label: 'System audio (what plays on this computer)' })
+  };
   devices.forEach(dev => {
     const opt = document.createElement('option');
     const id = dev.id || dev.name;
     opt.value = id;
-    opt.textContent = `${dev.description}${dev.isDefault ? ' (Default)' : ''}`;
+    opt.textContent = `${dev.description.replace(/^System audio: /, '')}${dev.isDefault ? ' (Default)' : ''}`;
     if (previousValue && id === previousValue) {
       opt.selected = true;
       matchedPrevious = true;
     } else if (!previousValue && dev.isDefault) {
       opt.selected = true;
     }
-    select.appendChild(opt);
+    (dev.type === 'output' ? groups.output : groups.input).appendChild(opt);
   });
+  [groups.input, groups.output].forEach(g => { if (g.children.length) select.appendChild(g); });
 
   if (!matchedPrevious && !select.value && select.options.length > 0) {
     select.options[0].selected = true;
@@ -573,6 +578,8 @@ function renderRecordingsList() {
   const countBadge = document.getElementById('library-count-badge');
   if (countBadge) {
     countBadge.textContent = `${filtered.length} ${filtered.length === 1 ? 'track' : 'tracks'}`;
+    const tabCount = document.getElementById('tab-count');
+    if (tabCount) tabCount.textContent = String(allRecordings.length);
   }
 
   if (filtered.length === 0) {
@@ -619,7 +626,9 @@ function renderRecordingsList() {
 
     const sourceBadge = rec.publishEligible
       ? '<span class="source-badge owned" title="Captured from a dedicated owned audio input">OWNED INPUT</span>'
-      : '';
+      : (rec.sourceKind === 'system_loopback'
+        ? '<span class="source-badge system" title="Recorded from system audio; not eligible for Break-Wave">SYSTEM AUDIO</span>'
+        : '');
 
     const tagsHtml = (rec.tags || []).map(t => `<span class="track-tag">${escapeHtml(t)}</span>`).join('');
 
@@ -1207,3 +1216,40 @@ document.getElementById('debug-copy').addEventListener('click', () => {
   navigator.clipboard.writeText(debugBuffer.map(debugFormat).join('\n')).then(
     () => showMessage('Debug log copied'), () => showMessage('Copy failed', true));
 });
+
+// ---- Studio layout: Record / Vault tabs (tablet + phone) and dock sizing ----
+(function initStudioLayout() {
+  const app = document.querySelector('.app-container');
+  const tabs = Array.from(document.querySelectorAll('[data-view-tab]'));
+  function setView(view) {
+    app.dataset.view = view;
+    tabs.forEach(t => {
+      const on = t.dataset.viewTab === view;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-pressed', String(on));
+    });
+    window.scrollTo({ top: 0 });
+    if (view === 'record') setTimeout(resizeCanvas, 30);
+  }
+  tabs.forEach(t => t.addEventListener('click', () => setView(t.dataset.viewTab)));
+
+  // keep toasts clear of the fixed transport dock
+  const dock = document.querySelector('.dock');
+  if (dock && 'ResizeObserver' in window) {
+    new ResizeObserver(() => {
+      const fixed = getComputedStyle(dock).position === 'fixed';
+      document.documentElement.style.setProperty('--dock-h', fixed ? `${dock.offsetHeight}px` : '0px');
+    }).observe(dock);
+  }
+
+  // narrow screens: start with take details collapsed to keep the meters on screen
+  const take = document.getElementById('take-details');
+  if (take && window.matchMedia('(max-width: 560px)').matches) take.open = false;
+
+  // monitor button: expose pressed state to assistive tech
+  const mon = document.getElementById('monitor-toggle-btn');
+  if (mon && 'MutationObserver' in window) {
+    new MutationObserver(() => mon.setAttribute('aria-pressed', String(mon.classList.contains('active'))))
+      .observe(mon, { attributes: true, attributeFilter: ['class'] });
+  }
+})();
