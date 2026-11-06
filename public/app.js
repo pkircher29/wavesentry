@@ -57,7 +57,7 @@ window.addEventListener('resize', resizeCanvas);
 setTimeout(resizeCanvas, 60);
 
 function drawStudioGraticule(w, h) {
-  ctx.strokeStyle = 'rgba(148, 163, 184, 0.08)';
+  ctx.strokeStyle = 'rgba(243, 240, 234, 0.12)';
   ctx.lineWidth = 1;
 
   const horizontalSteps = [0.2, 0.5, 0.8];
@@ -112,7 +112,7 @@ function drawOscilloscopeView(w, h, levelL, levelR, advanceHistory) {
 
   // Center 0 dB axis line
   const centerY = Math.round(h / 2) + 0.5;
-  ctx.strokeStyle = 'rgba(34, 211, 238, 0.22)';
+  ctx.strokeStyle = 'rgba(243, 240, 234, 0.35)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, centerY);
@@ -121,9 +121,8 @@ function drawOscilloscopeView(w, h, levelL, levelR, advanceHistory) {
 
   const barWidth = w / maxHistory;
   const gradient = ctx.createLinearGradient(0, 0, 0, h);
-  gradient.addColorStop(0, '#38bdf8');
-  gradient.addColorStop(0.5, '#10b981');
-  gradient.addColorStop(1, '#38bdf8');
+  gradient.addColorStop(0, '#f3f0ea');
+  gradient.addColorStop(1, '#f3f0ea');
   ctx.fillStyle = gradient;
 
   for (let i = 0; i < amplitudeHistory.length; i++) {
@@ -144,10 +143,10 @@ function drawSpectrumView(w, h, spectrum, advanceHistory) {
   const barWidth = (w - (numBands + 1) * gap) / numBands;
 
   const gradient = ctx.createLinearGradient(0, h - bottomReserved, 0, 6);
-  gradient.addColorStop(0, '#0ea5e9');
-  gradient.addColorStop(0.65, '#10b981');
-  gradient.addColorStop(0.9, '#f59e0b');
-  gradient.addColorStop(1, '#ef4444');
+  gradient.addColorStop(0, '#f3f0ea');
+  gradient.addColorStop(0.82, '#f3f0ea');
+  gradient.addColorStop(0.92, '#e6b15c');
+  gradient.addColorStop(1, '#e7a19c');
 
   ctx.font = '9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
   ctx.textAlign = 'center';
@@ -167,16 +166,16 @@ function drawSpectrumView(w, h, spectrum, advanceHistory) {
     }
     const peakY = h - bottomReserved - (spectrumPeaks[i] * usableHeight);
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+    ctx.fillStyle = 'rgba(243, 240, 234, 0.06)';
     ctx.fillRect(x, 6, barWidth, usableHeight);
 
     ctx.fillStyle = gradient;
     ctx.fillRect(x, y, barWidth, barHeight);
 
-    ctx.fillStyle = '#e2e8f0';
+    ctx.fillStyle = '#f3f0ea';
     ctx.fillRect(x, Math.max(4, peakY - 2), barWidth, 2);
 
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.65)';
+    ctx.fillStyle = 'rgba(243, 240, 234, 0.72)';
     ctx.fillText(FFT_LABELS[i] || '', x + barWidth / 2, h - 4);
   }
 }
@@ -352,7 +351,7 @@ function connectWebSocket() {
 
   ws.onopen = () => {
     document.getElementById('status-dot').className = 'status-dot connected';
-    document.getElementById('status-text').textContent = 'CONNECTED';
+    document.getElementById('status-text').textContent = 'Connected';
     clearTimeout(reconnectTimer);
 
     document.getElementById('device-select').removeAttribute('disabled');
@@ -363,7 +362,7 @@ function connectWebSocket() {
 
   ws.onclose = () => {
     document.getElementById('status-dot').className = 'status-dot idle';
-    document.getElementById('status-text').textContent = 'DISCONNECTED';
+    document.getElementById('status-text').textContent = 'Disconnected';
 
     document.getElementById('device-select').setAttribute('disabled', 'true');
     document.getElementById('monitor-toggle-btn').setAttribute('disabled', 'true');
@@ -497,35 +496,35 @@ function updateStatus(status) {
       recordBtn.className = 'btn btn-record armed';
       recordBtnText.textContent = 'Armed: Waiting for Sound... (Space to Cancel)';
       recordIndicator.className = 'recording-indicator-pulse armed';
-      if (recordStateLabel) recordStateLabel.textContent = 'ARMED';
+      if (recordStateLabel) recordStateLabel.textContent = 'Armed';
       timerDisplay.className = 'timer-display armed';
       statusDot.className = 'status-dot armed';
-      statusText.textContent = 'ARMED';
+      statusText.textContent = 'Armed';
     } else if (status.recordingState === 'finalizing') {
       recordBtn.className = 'btn btn-record recording';
       recordBtn.disabled = true;
       recordBtnText.textContent = 'Finalizing WAV...';
       recordIndicator.className = 'recording-indicator-pulse';
-      if (recordStateLabel) recordStateLabel.textContent = 'FINALIZING';
+      if (recordStateLabel) recordStateLabel.textContent = 'Finalizing';
       timerDisplay.className = 'timer-display recording';
       statusDot.className = 'status-dot recording';
-      statusText.textContent = 'FINALIZING';
+      statusText.textContent = 'Finalizing';
     } else {
       recordBtn.disabled = false;
       recordBtn.className = 'btn btn-record recording';
       recordBtnText.textContent = 'Stop Recording (Space)';
       recordIndicator.className = 'recording-indicator-pulse active';
-      if (recordStateLabel) recordStateLabel.textContent = 'RECORDING';
+      if (recordStateLabel) recordStateLabel.textContent = 'Recording';
       timerDisplay.className = 'timer-display recording';
       statusDot.className = 'status-dot recording';
-      statusText.textContent = 'RECORDING';
+      statusText.textContent = 'Recording';
     }
   } else {
     recordBtn.disabled = !ws || ws.readyState !== WebSocket.OPEN;
     recordBtn.className = 'btn btn-record';
     recordBtnText.textContent = 'Start Recording (Space)';
     recordIndicator.className = 'recording-indicator-pulse';
-    if (recordStateLabel) recordStateLabel.textContent = 'STANDBY';
+    if (recordStateLabel) recordStateLabel.textContent = 'Standby';
     timerDisplay.className = 'timer-display idle';
     timerDisplay.textContent = '00:00:00';
     document.getElementById('record-size').textContent = '0.00 MB';
@@ -533,10 +532,10 @@ function updateStatus(status) {
     if (ws && ws.readyState === WebSocket.OPEN) {
       if (status.monitoring) {
         statusDot.className = 'status-dot monitoring';
-        statusText.textContent = 'MONITORING';
+        statusText.textContent = 'Monitoring';
       } else {
         statusDot.className = 'status-dot connected';
-        statusText.textContent = 'CONNECTED';
+        statusText.textContent = 'Connected';
       }
     }
   }
@@ -653,6 +652,7 @@ function renderRecordingsList() {
         ${tagsHtml ? `<div class="rec-tags-row">${tagsHtml}</div>` : ''}
       </div>
       <div class="rec-actions-col">
+        <button class="btn-rec-action rename-btn" type="button">Rename</button>
         <button class="btn-rec-action favorite-btn ${rec.favorite ? 'active' : ''}" type="button" title="${rec.favorite ? 'Remove from Favorites' : 'Mark as Favorite'}">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
         </button>
@@ -676,6 +676,11 @@ function renderRecordingsList() {
       playTrack(rec);
     });
     item.addEventListener('click', () => playTrack(rec));
+
+    item.querySelector('.rename-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      startRename(item, rec);
+    });
 
     item.querySelector('.favorite-btn').addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -709,6 +714,54 @@ function renderRecordingsList() {
 function escapeHtml(str) {
   if (!str) return '';
   return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
+}
+
+function startRename(item, rec) {
+  const titleEl = item.querySelector('.rec-title');
+  if (!titleEl) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'custom-input rec-rename-input';
+  input.maxLength = 80;
+  input.value = rec.title || '';
+  input.setAttribute('aria-label', 'New track name');
+  titleEl.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    const title = input.value.trim();
+    if (!save || !title || title === rec.title) {
+      renderRecordingsList();
+      return;
+    }
+    try {
+      const res = await fetch(`/api/recordings/${encodeURIComponent(rec.filename)}/metadata`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      if (!res.ok) throw new Error('Rename failed');
+      rec.title = title;
+      if (activeTrack && activeTrack.filename === rec.filename) {
+        activeTrack.title = title;
+        document.getElementById('player-title').textContent = title;
+      }
+      renderRecordingsList();
+      showMessage(`Renamed to ${title}`);
+    } catch (err) {
+      showMessage(err.message || 'Rename failed', true);
+      renderRecordingsList();
+    }
+  };
+  input.addEventListener('click', (e) => e.stopPropagation());
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') finish(true);
+    if (e.key === 'Escape') finish(false);
+  });
+  input.addEventListener('blur', () => finish(true));
 }
 
 async function toggleFavorite(rec) {

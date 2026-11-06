@@ -37,7 +37,7 @@
 
         <div class="status-badge-container" role="status" aria-live="polite">
           <div id="status-dot" class="status-dot idle"></div>
-          <span id="status-text" class="status-text">DISCONNECTED</span>
+          <span id="status-text" class="status-text">Disconnected</span>
         </div>
       </div>
     </header>
@@ -50,7 +50,7 @@
           <div class="panel-header-left">
             <h2 class="panel-title">Capture &amp; Live Feed</h2>
           </div>
-          <span class="panel-indicator">DEDICATED INPUT</span>
+          <span class="panel-indicator">Owned input</span>
         </div>
 
         <div class="panel-content">
@@ -77,7 +77,7 @@
           <!-- Monitoring & Level Meters -->
           <div class="monitoring-container">
             <div class="monitor-controls">
-              <span class="section-sublabel">Live Studio VU Levels</span>
+              <span class="section-sublabel">Level</span>
               <button id="monitor-toggle-btn" class="btn btn-secondary btn-sm" type="button" disabled>
                 <span class="btn-icon monitor-icon"></span>
                 <span id="monitor-btn-text">Enable Monitor (M)</span>
@@ -128,7 +128,7 @@
           <!-- Real-Time Waveform / Spectrum Visualizer -->
           <div class="waveform-container">
             <div class="visualizer-header">
-              <span class="section-sublabel">Real-Time Signal Analyzer</span>
+              <span class="section-sublabel">Signal</span>
               <div class="viz-mode-toggles" role="group" aria-label="Visualizer Mode">
                 <button id="viz-mode-wave" class="viz-mode-btn active" type="button" title="Oscilloscope Waveform (V)">Waveform</button>
                 <button id="viz-mode-fft" class="viz-mode-btn" type="button" title="16-Band Spectrum FFT (V)">Spectrum FFT</button>
@@ -142,11 +142,28 @@
           <!-- Recording Controls Card -->
           <div class="recording-card">
             <div class="recording-card-header">
-              <span class="section-sublabel">Recorder Engine</span>
+              <span class="section-sublabel">Transport</span>
               <div class="recording-status-pill">
-                <span id="recording-state-label" class="recording-state-label">STANDBY</span>
+                <span id="recording-state-label" class="recording-state-label">Standby</span>
                 <div id="recording-indicator" class="recording-indicator-pulse"></div>
               </div>
+            </div>
+
+            <div class="timer-display-container">
+              <div class="display-label">Elapsed</div>
+              <div id="timer-display" class="timer-display idle">00:00:00</div>
+              <div class="display-details">
+                <span id="record-size" class="display-detail-item">0.00 MB</span>
+                <span class="display-detail-divider">|</span>
+                <span class="display-detail-item">44.1 kHz / 16-bit / Stereo PCM</span>
+              </div>
+            </div>
+
+            <div class="recording-actions">
+              <button id="record-btn" class="btn btn-record" type="button" disabled>
+                <span class="record-btn-dot"></span>
+                <span id="record-btn-text">Start Recording (Space)</span>
+              </button>
             </div>
 
             <div class="track-metadata-inputs">
@@ -185,24 +202,6 @@
                 </div>
               </div>
             </div>
-
-            <!-- Monospaced Segment Display -->
-            <div class="timer-display-container">
-              <div class="display-label">CAPTURE TRANSPORT READOUT</div>
-              <div id="timer-display" class="timer-display idle">00:00:00</div>
-              <div class="display-details">
-                <span id="record-size" class="display-detail-item">0.00 MB</span>
-                <span class="display-detail-divider">|</span>
-                <span class="display-detail-item">44.1 kHz / 16-bit / Stereo PCM</span>
-              </div>
-            </div>
-
-            <div class="recording-actions">
-              <button id="record-btn" class="btn btn-record" type="button" disabled>
-                <span class="record-btn-dot"></span>
-                <span id="record-btn-text">Start Recording (Space)</span>
-              </button>
-            </div>
           </div>
         </div>
       </section>
@@ -219,7 +218,7 @@
               <svg class="search-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
                 <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
               </svg>
-              <input type="text" id="library-search" class="search-input" placeholder="Search tracks, artists, tags... (/)" aria-label="Search recordings">
+              <input type="text" id="library-search" class="search-input" placeholder="Search (/)" aria-label="Search recordings">
             </div>
             <button id="refresh-library-btn" class="btn-icon-only refresh-btn" type="button" title="Refresh library" aria-label="Refresh library">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -233,7 +232,7 @@
           <!-- Vault Filter Bar -->
           <div class="library-filter-bar" role="tablist" aria-label="Filter recordings">
             <button id="filter-all" class="filter-chip active" type="button" data-filter="all">All Tracks</button>
-            <button id="filter-favorites" class="filter-chip" type="button" data-filter="favorites">Favorites ★</button>
+            <button id="filter-favorites" class="filter-chip" type="button" data-filter="favorites">Favorites</button>
             <button id="filter-eligible" class="filter-chip" type="button" data-filter="eligible">Break-Wave Eligible</button>
           </div>
 
@@ -242,7 +241,7 @@
             <div class="player-header">
               <div class="player-track-info">
                 <div class="player-title-row">
-                  <span class="player-now-playing-badge">MONITORING VAULT</span>
+                  <span class="player-now-playing-badge">Playing</span>
                   <span id="player-title" class="player-title">Track Title</span>
                 </div>
                 <span id="player-artist" class="player-artist">Unknown Artist</span>
@@ -331,7 +330,7 @@
         <span class="footer-divider">|</span>
         <span>Transcoder: <strong>FFmpeg (MP3, FLAC, AAC, OGG, WAV)</strong></span>
       </div>
-      <div class="footer-version">WaveSentry Pro v1.1.0</div>
+      <div class="footer-version">WaveSentry Pro v1.1.4</div>
     </footer>
   </div>
 

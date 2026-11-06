@@ -41,6 +41,8 @@ describe('owned-source Break-Wave UI', () => {
     assert.match(html, /id="delete-modal"/);
     assert.doesNotMatch(app, /window\.alert/);
     assert.doesNotMatch(css, /transition:\s*all\b/);
+    assert.match(app, /rename-btn/);
+    assert.match(app, /function startRename/);
     assert.match(css, /font-variant-numeric:\s*tabular-nums/);
   });
 });
