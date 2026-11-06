@@ -17,7 +17,7 @@ async function createWindow() {
     height: 860,
     minWidth: 960,
     minHeight: 680,
-    backgroundColor: '#090b0f',
+    backgroundColor: '#d9d4cc',
     autoHideMenuBar: true,
     title: 'WaveSentry Pro',
     icon: path.join(__dirname, '..', 'public', 'favicon.ico'),
